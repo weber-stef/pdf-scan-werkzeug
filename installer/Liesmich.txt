@@ -1,0 +1,40 @@
+PDF-Scan-Werkzeug: Installer bauen
+===================================
+
+Hier entsteht aus dem Werkzeug in _2026-08-21-PDF-Scan-Werkzeug ein Setup, das sich auf jeden Windows-Rechner mitnehmen laesst. Das Werkzeug selbst liegt unveraendert dort; dieser Ordner enthaelt nur das Bauwerk.
+
+Was darin liegt
+----------------
+bauen.ps1 - baut alles in zwei Schritten (PyInstaller, dann Inno Setup) und laesst danach einen Rauchtest laufen.
+Anleitung.txt - liegt dem fertigen Programm bei, erscheint im Startmenue und als "Liesmich" im Setup-Assistenten.
+paket\PDF-Werkzeug.iss - die Bauanweisung fuer Inno Setup, inklusive Registry-Eintragung per [Code].
+paket\programm, paket\setup, paket\zwischenstand - Bauergebnisse.
+
+Bauen
+-----
+powershell -ExecutionPolicy Bypass -File bauen.ps1
+Mit -Sauber werden vorherige Bauergebnisse vorher weggeworfen, mit -NurProgramm entsteht nur der Programmordner ohne Setup.
+
+Ergebnis am 18.09.2026: paket\setup\PDF-Werkzeug-Setup-1.0.0.exe, 40 MB. Entpackt rund 119 MB (PyMuPDF, Pillow, numpy, pywin32 und tessdata sind deutlich groesser als reines tkinter).
+
+Was sich gegenueber dem bisherigen Handbetrieb aendert
+--------------------------------------------------------
+Bisher lag die Windows-Integration in sechs einzeln zu importierenden .reg-Dateien mit fest verdrahtetem G:\...-Pfad (siehe README des Werkzeugs) - nach jedem Verschieben des Projektordners brachen alle vier Wege gleichzeitig (Vorfall 01.09.2026, siehe [[project_pdf_tool]] in memory). Der Installer traegt dieselben Eintraege jetzt selbst ein, mit dem tatsaechlichen Installationspfad ({app}):
+
+- Rechtsklick "PDF bearbeiten" / "PDF betrachten" / "Ausgewaehlte in eine PDF zusammenfassen" -> HKCU, per [Registry]-Sektion, an eine der drei waehlbaren Setup-Aufgaben gebunden.
+- MultipleInvokePromptMinimum wird nur angehoben (InvokeLimitNiedrig-Check in [Code]), nie abgesenkt.
+- "Als Standardprogramm waehlbar" (Applications-Eintraege + OpenWithList) laeuft ebenfalls ueber HKCU, ohne Ruecksprache.
+- Die zusaetzliche Unteraufgabe "maschinenweit eintragen" schreibt dieselben Applications-Eintraege noch einmal nach HKLM - noetig, weil auf diesem Rechner HKCU-Eintraege im "Andere App auswaehlen"-Dialog aus unbekanntem Grund nicht auftauchen (siehe README). Das geht nicht per [Registry]-Sektion (Setup laeuft mit PrivilegesRequired=lowest, also unelevated), sondern per [Code]: eine .reg-Datei wird zur Laufzeit mit dem echten {app}-Pfad zusammengebaut und per "ShellExec('runas', 'regedit.exe', '/s "..."', ...)" einmalig elevated importiert - derselbe UAC-Dialog wie beim bisherigen Doppelklick auf PDF-Standardprogramm*.reg, nur automatisch mit dem richtigen Pfad statt von Hand editiert. Ob es geklappt hat, wird in HKCU\Software\PDF-Werkzeug\MaschinenweitRegistriert vermerkt, damit die Deinstallation weiss, ob sie den elevierten Cleanup ueberhaupt anstossen muss.
+- Der bisherige Wrapper PDF-Betrachten.exe (noetig, weil Windows pythonw.exe aus "Andere App auswaehlen" ausblendet) entfaellt ersatzlos: PyInstaller baut eine "echte" .exe (PDF-Werkzeug.exe), die nicht unter diese Ausblendung faellt. Bearbeiten/Betrachten/Zusammenfassen laufen alle ueber dieselbe .exe mit/ohne --view/--merge.
+
+Stolperstein beim Paketieren: tessdata landet nicht neben der .exe
+---------------------------------------------------------------------
+pdf_tool.py bestimmte TESSDATA_DIR bisher ueber Path(__file__).parent. Im gepackten Zustand haette das ins interne PyInstaller-Paketverzeichnis gezeigt statt zum Programmordner - der bekannte Stolperstein aus [[project_paketierung_installer]] (schon beim Synchronisationstool aufgefallen). Erster Fix-Versuch (sys.executable-Ordner) ging von der falschen Annahme aus, --add-data lege Dateien neben die .exe; tatsaechlich landen sie im onedir-Modus unter _internal\tessdata. Da tessdata hier nur gelesen wird (beide Sprachen liegen bei) und der Installationsordner ohnehin beschreibbar ist (kein Program Files), zeigt TESSDATA_DIR jetzt auf sys._MEIPASS (= _internal) im gepackten Zustand, sonst wie bisher auf den Skriptordner.
+
+Gepruefte, aber bewusst NICHT auf diesem Rechner ausgefuehrte Schritte
+--------------------------------------------------------------------------
+Die Kontextmenue- und Standardprogramm-Registry-Schluessel des Installers heissen absichtlich genauso wie die der bestehenden Handregistrierung (PDFBearbeiten, PDFBetrachten, PDFZusammenfassen) - ein echter Lauf mit diesen Aufgaben aktiviert wuerde die bestehende, auf die G:-Entwicklungskopie zeigende Registrierung auf den Installationsordner umbiegen. Die Probeinstallation am 18.09.2026 lief deshalb mit /MERGETASKS="!desktopsymbol,!kontextmenue,!standardprogramm" in einen Wegwerfordner (%TEMP%\pdf-werkzeug-probe): Installation, Start mit einer Test-PDF (Fenster blieb offen), stille Deinstallation - alles sauber, bestehende Registry unangetastet geprueft. Der elevierte HKLM-Zweig in [Code] wurde nur gegen Compile-Fehler geprueft (ISCC kompiliert ihn anstandslos), nicht tatsaechlich mit UAC-Bestaetigung durchlaufen.
+
+Wer das Setup mit echter Windows-Integration ausprobieren will: entweder auf einem anderen Rechner, oder hier bewusst und mit Wissen, dass danach "PDF bearbeiten"/"PDF betrachten" auf die installierte Kopie statt auf die G:-Entwicklungsversion zeigen (mit den alten .reg-Dateien aus _2026-08-21-PDF-Scan-Werkzeug wieder rueckgaengig zu machen).
+
+Auch bei Probeinstallationen mit aktivierter Aufgabe "desktopsymbol" Vorsicht: Auf dem Desktop (D:\Users\stef) liegt bereits eine handgemachte PDF-Werkzeug.lnk, die auf die G:-Entwicklungskopie zeigt - der Installer wuerde sie beim Namen "{#Programm}" = "PDF-Scan-Werkzeug" nicht ueberschreiben (anderer Dateiname), trotzdem sicherheitshalber bei jeder Probeinstallation abwaehlen.

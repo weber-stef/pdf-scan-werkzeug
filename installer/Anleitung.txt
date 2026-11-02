@@ -1,0 +1,51 @@
+PDF-Scan-Werkzeug
+=================
+
+Kleines Werkzeug zum Nachbearbeiten gescannter PDFs sowie zum Betrachten,
+Drucken und Zusammenfassen beliebiger PDFs. Läuft eigenständig, es muss
+nichts weiter auf dem Rechner installiert sein.
+
+Start
+-----
+Über das Startmenü ("PDF-Scan-Werkzeug" bzw. "... (nur Betrachten)") oder
+die Desktop-Verknüpfung, falls beim Setup angehakt.
+
+Windows-Integration (bei der Installation wählbar)
+---------------------------------------------------
+- Rechtsklick-Menü: fügt "PDF bearbeiten", "PDF betrachten" und
+  "Ausgewählte in eine PDF zusammenfassen" zum Kontextmenü hinzu (bei
+  mehreren markierten Dateien landen alle gemeinsam in einem Fenster).
+- Als Standardprogramm registrieren: macht "PDF bearbeiten" und
+  "PDF betrachten" unter Rechtsklick -> "Öffnen mit" -> "Andere App
+  auswählen" wählbar. Danach dort die gewünschte Variante wählen und den
+  Haken bei "Immer diese App verwenden" setzen - Windows schützt diese
+  letzte Auswahl seit Windows 8/10 mit einem Hash, der sich nicht
+  automatisch setzen lässt, dieser eine Klick bleibt also übrig.
+- Taucht der Eintrag im Dialog "Andere App auswählen" nicht auf (auf
+  manchen Rechnern zeigt Windows dort nur maschinenweite Einträge an), hilft
+  die Unteraufgabe "zusätzlich maschinenweit eintragen". Sie fragt einmal
+  per Benutzerkontensteuerung nach Administratorrechten, alles andere am
+  Setup bleibt ohne Rückfrage.
+
+Wer die Windows-Integration nachträglich ändern möchte: einfach das Setup
+erneut ausführen (überschreibt bestehende Einträge) oder über "Apps &
+Features" deinstallieren - das räumt alle beim Setup gesetzten Einträge
+wieder auf.
+
+Funktionen des Werkzeugs
+-------------------------
+- OCR-Texterkennung (Tesseract ist mitgeliefert, Deutsch und Englisch)
+- Gradationskurven, gerade ausrichten, Bereich freistellen
+- Seiten löschen oder drehen, umbenennen, Datum anfügen
+- Mehrere Dateien zu einer PDF zusammenfassen (PDF, JPG, PNG, TIF, BMP,
+  GIF, PPM, WebP, PSD, SVG, TXT)
+- Integrierter Betrachter: Blättern, Zoom, Vollbild (F11), Text markieren
+  und kopieren, Drucken (Strg+P), einzelne oder mehrere Seiten unter neuem
+  Namen als eigene Datei(en) speichern
+
+Deinstallieren
+---------------
+Über "Apps & Features" oder den Eintrag im Startmenü. Wurde die
+maschinenweite Registrierung genutzt, fragt die Deinstallation dafür noch
+einmal per Benutzerkontensteuerung nach - sie räumt diesen Teil sonst nicht
+mit auf.

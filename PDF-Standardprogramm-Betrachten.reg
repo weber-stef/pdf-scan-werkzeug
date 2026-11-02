@@ -1,0 +1,42 @@
+Windows Registry Editor Version 5.00
+
+; Registriert das PDF-Scan-Werkzeug (nur der Viewer) als auswaehlbares
+; Standardprogramm fuer .pdf-Dateien -- maschinenweit unter HKLM, weil
+; Windows' "Andere App auswaehlen"-Dialog Eintraege unter HKCU auf diesem
+; Rechner nicht anzeigt. Der Import braucht Administratorrechte
+; (UAC-Abfrage beim Doppelklick bestaetigen).
+;
+; Zeigt auf PDF-Betrachten.exe statt direkt auf pythonw.exe: Windows
+; blendet bekannte Skript-Interpreter (pythonw.exe, cmd.exe, ...) aus dem
+; "Andere App auswaehlen"-Dialog aus, unabhaengig von der sonstigen
+; Registry-Registrierung. PDF-Betrachten.exe ist ein kleiner, mit
+; PyInstaller gebauter Wrapper, der pythonw.exe pdf_tool.py --view
+; dahinter aufruft (Quelle: pdf_betrachten_launcher.py).
+;
+; Danach: Rechtsklick auf eine PDF -> "Oeffnen mit" -> "Andere App
+; auswaehlen" -> "PDF betrachten (Scan-Werkzeug)" -> Haken bei "Immer diese
+; App ... verwenden" setzen.
+;
+; Windows schuetzt die eigentliche Standard-App-Auswahl (UserChoice) seit
+; Windows 8/10 zusaetzlich mit einem Hash, der sich nicht per .reg-Datei
+; setzen laesst -- dieser letzte Schritt muss daher einmal manuell
+; bestaetigt werden.
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Betrachten.exe]
+@="PDF betrachten (Scan-Werkzeug)"
+"FriendlyAppName"="PDF betrachten (Scan-Werkzeug)"
+
+; Klassisches rotes PDF-Icon (dasselbe, das Acrobat als Standard genutzt
+; hat) statt des Werkzeug-Icons -- damit sich nur das Oeffnen-Programm
+; aendert, nicht das gewohnte Icon aller .pdf-Dateien im Explorer.
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Betrachten.exe\DefaultIcon]
+@="C:\\windows\\Installer\\{AC76BA86-1033-F400-7760-000000000004}\\_PDFFile.ico,0"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Betrachten.exe\shell\open\command]
+@="\"G:\\_Projekte\\_Projekte-Wissen\\_0000_Scripting-with-Claude-2026\\_2026-08-21-PDF-Scan-Werkzeug\\PDF-Betrachten.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Betrachten.exe\SupportedTypes]
+".pdf"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.pdf\OpenWithList\PDF-Betrachten.exe]
+@=""

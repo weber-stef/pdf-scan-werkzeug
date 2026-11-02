@@ -1,0 +1,32 @@
+Windows Registry Editor Version 5.00
+
+; Registriert das PDF-Scan-Werkzeug (volles Werkzeug) als auswaehlbares
+; Standardprogramm fuer .pdf-Dateien -- maschinenweit unter HKLM, weil
+; Windows' "Andere App auswaehlen"-Dialog Eintraege unter HKCU auf diesem
+; Rechner nicht anzeigt. Der Import braucht Administratorrechte (UAC-Abfrage
+; beim Doppelklick bestaetigen).
+;
+; Danach: Rechtsklick auf eine PDF -> "Oeffnen mit" -> "Andere App
+; auswaehlen" -> "PDF bearbeiten (Scan-Werkzeug)" -> Haken bei "Immer diese
+; App ... verwenden" setzen.
+;
+; Windows schuetzt die eigentliche Standard-App-Auswahl (UserChoice) seit
+; Windows 8/10 zusaetzlich mit einem Hash, der sich nicht per .reg-Datei
+; setzen laesst -- dieser letzte Schritt muss daher einmal manuell
+; bestaetigt werden.
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Bearbeiten.exe]
+@="PDF bearbeiten (Scan-Werkzeug)"
+"FriendlyAppName"="PDF bearbeiten (Scan-Werkzeug)"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Bearbeiten.exe\DefaultIcon]
+@="G:\\_Projekte\\_Projekte-Wissen\\_0000_Scripting-with-Claude-2026\\_2026-08-21-PDF-Scan-Werkzeug\\pdf-bearbeiten.ico"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Bearbeiten.exe\shell\open\command]
+@="\"C:\\Python314\\pythonw.exe\" \"G:\\_Projekte\\_Projekte-Wissen\\_0000_Scripting-with-Claude-2026\\_2026-08-21-PDF-Scan-Werkzeug\\pdf_tool.py\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Bearbeiten.exe\SupportedTypes]
+".pdf"=""
+
+[HKEY_LOCAL_MACHINE\Software\Classes\.pdf\OpenWithList\PDF-Bearbeiten.exe]
+@=""

@@ -1,0 +1,8 @@
+Windows Registry Editor Version 5.00
+
+; Entfernt die Registrierung des PDF-Scan-Werkzeugs (Betrachten) als
+; Standardprogramm. Braucht Administratorrechte (UAC-Abfrage bestaetigen).
+
+[-HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Betrachten.exe]
+
+[-HKEY_LOCAL_MACHINE\Software\Classes\.pdf\OpenWithList\PDF-Betrachten.exe]

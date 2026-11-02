@@ -1,0 +1,8 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.pdf\shell\PDFBetrachten]
+@="PDF betrachten"
+"Icon"="G:\\_Projekte\\_Projekte-Wissen\\_0000_Scripting-with-Claude-2026\\_2026-08-21-PDF-Scan-Werkzeug\\pdf_werkzeug.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.pdf\shell\PDFBetrachten\command]
+@="\"C:\\Python314\\pythonw.exe\" \"G:\\_Projekte\\_Projekte-Wissen\\_0000_Scripting-with-Claude-2026\\_2026-08-21-PDF-Scan-Werkzeug\\pdf_tool.py\" \"%1\" --view"

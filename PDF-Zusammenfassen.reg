@@ -1,0 +1,13 @@
+Windows Registry Editor Version 5.00
+
+; Eintrag fuer alle Dateien. Bei gemischter Auswahl (PDF + PSD + JPG) zeigt der
+; Explorer nur Befehle, die fuer alle markierten Typen gelten - deshalb nicht
+; unter SystemFileAssociations je Dateityp.
+; Ohne MultiSelectModel gilt die Vorgabe Document: einmal je markierter Datei.
+
+[HKEY_CURRENT_USER\Software\Classes\*\shell\PDFZusammenfassen]
+@="Ausgewählte in eine PDF zusammenfassen"
+"Icon"="G:\\_Projekte\\_Projekte-Wissen\\_0000_Scripting-with-Claude-2026\\_2026-08-21-PDF-Scan-Werkzeug\\pdf_werkzeug.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\*\shell\PDFZusammenfassen\command]
+@="\"C:\\Python314\\pythonw.exe\" \"G:\\_Projekte\\_Projekte-Wissen\\_0000_Scripting-with-Claude-2026\\_2026-08-21-PDF-Scan-Werkzeug\\pdf_tool.py\" \"%1\" --merge"

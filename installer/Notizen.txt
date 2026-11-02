@@ -1,0 +1,26 @@
+PDF-Scan-Werkzeug: Session vom 18.09.2026 - neue Viewer-Funktion und erster echter Installer
+Werkzeug selbst liegt in _2026-08-21-PDF-Scan-Werkzeug\pdf_tool.py, dieser Ordner (_2026-09-18-PDF-Werkzeug-Installer) enthält nur den neu gebauten Installer dazu.
+
+Neu im Viewer (pdf_tool.py)
+Knopf "💾 Seite speichern (Strg+S)" in der Werkzeugleiste und im Rechtsklick-Menü des Betrachters öffnet SavePagesDialog.
+Seitenauswahl wie beim Drucken: aktuelle Seite, Bereich ("1,3,5-8", parse_page_range) oder alle Seiten.
+Eigener Dateiname eingebbar, unzulässige Zeichen werden zu "_", ein leeres Feld fällt auf den Originalnamen zurück.
+Ausgabe wahlweise "Alle ausgewählten Seiten in einer Datei" (Vorgabe) oder "Jede Seite als eigene Datei" (dann _S1, _S2 ... angehängt).
+Zielordner-Feld zeigt darunter eine Liste der dort schon vorhandenen Dateien, aktualisiert sich beim Ordnerwechsel und nach dem Speichern.
+Überschreibschutz über das vorhandene unique_path (_2, _3 ...).
+Wichtige Falle dabei entdeckt: Läuft schon eine ältere Instanz des Werkzeugs, reicht ein neuer Aufruf die Datei nur über Port 48293 weiter, lädt aber NICHT den neuen Code - Codeänderungen zeigen erst nach Beenden der alten pythonw.exe (Get-NetTCPConnection -LocalPort 48293, zugehörige PID killen) und Neustart Wirkung. Zweimal in dieser Session passiert.
+Für die Paketierung außerdem TESSDATA_DIR in pdf_tool.py umgestellt: zeigt im gepackten Zustand auf sys._MEIPASS statt auf den Skriptordner, im normalen (unverpackten) Betrieb unverändert wie vorher - der Alltagsbetrieb über die G:-Kopie ist davon nicht betroffen.
+
+Neuer Installer (dieser Ordner)
+Erste Frage war, was mit "Installer überarbeiten" gemeint ist - Rückfrage ergab: ein echtes Setup.exe für fremde Rechner (nicht die alten .reg-Dateien am Werkzeug selbst).
+bauen.ps1 baut in zwei Schritten: PyInstaller (--onedir --windowed, Name PDF-Werkzeug.exe, tessdata per --add-data mitgepackt) und danach Inno Setup (paket\PDF-Werkzeug.iss) zur Setup.exe.
+Ergebnis: paket\setup\PDF-Werkzeug-Setup-1.0.0.exe, 40 MB, entpackt rund 119 MB (PyMuPDF, Pillow, numpy, pywin32 und tessdata sind der Großteil).
+Installiert admin-frei nach %LOCALAPPDATA%\PDF-Werkzeug, mit Startmenü-Einträgen (Vollversion + nur Betrachten) und optionaler Desktop-Verknüpfung.
+Installer trägt Kontextmenü ("PDF bearbeiten" / "PDF betrachten" / "Ausgewählte in eine PDF zusammenfassen") und Standardprogramm-Registrierung jetzt selbst in HKCU ein, mit dem echten Installationspfad - Ersatz für die bisherigen .reg-Dateien mit fest verdrahtetem G:-Pfad, die beim letzten Ordnerumzug (01.09.2026) alle vier Wege gleichzeitig lahmgelegt hatten.
+Zusatzaufgabe "maschinenweit eintragen" für den Fall, dass "Andere App auswählen" die HKCU-Einträge nicht anzeigt (wie auf diesem Rechner beobachtet): läuft per [Code] in der .iss, baut eine .reg-Datei mit dem echten Pfad zusammen und importiert sie elevated per ShellExec('runas', 'regedit.exe', ...) - einmalige UAC-Bestätigung wie bisher, nur automatisiert statt von Hand editiert.
+Die bisherige Wrapper-Datei PDF-Betrachten.exe (nötig, weil Windows pythonw.exe aus "Andere App auswählen" ausblendet) entfällt ersatzlos, weil die von PyInstaller gebaute PDF-Werkzeug.exe selbst schon eine "echte" exe ist.
+Stolperstein beim Bauen: --add-data legt Dateien im onedir-Modus unter _internal ab, nicht neben die .exe - der erste Versuch (TESSDATA_DIR über sys.executable) war deshalb falsch, korrigiert auf sys._MEIPASS.
+Geprüft: PyInstaller-Build, Rauchtest der gepackten exe (startet, bleibt offen), stille Probeinstallation und -deinstallation in einen Wegwerfordner (%TEMP%\pdf-werkzeug-probe) - Registry danach restlos sauber.
+Bewusst NICHT geprüft: die echte Kontextmenü-/Standardprogramm-Registrierung auf diesem Rechner. Die Installer-Schlüssel heißen absichtlich genauso wie die bestehende Handregistrierung (PDFBearbeiten, PDFBetrachten, PDFZusammenfassen) - ein scharfer Lauf mit diesen Aufgaben aktiviert hätte die G:-Entwicklungskopie in der Registry auf die installierte Kopie umgebogen. Probeinstallation lief deshalb mit /MERGETASKS="!desktopsymbol,!kontextmenue,!standardprogramm". Der HKLM-Zweig in [Code] wurde nur gegen Kompilierfehler geprüft (ISCC kompiliert ihn anstandslos), nicht mit echter UAC-Bestätigung durchlaufen.
+Auf dem Desktop (D:\Users\stef) liegt bereits PDF-Werkzeug.lnk (zeigt auf die G:-Entwicklungskopie) - der Installer würde bei aktivierter Desktop-Aufgabe "PDF-Scan-Werkzeug.lnk" anlegen (anderer Name, keine Kollision), trotzdem bei jeder weiteren Probeinstallation sicherheitshalber abwählen.
+Wer die echte Windows-Integration als Nächstes ausprobieren will: am besten auf einem anderen Rechner, oder hier gezielt mit dem Wissen, dass danach "PDF bearbeiten"/"PDF betrachten" auf die installierte statt die G:-Kopie zeigen (Rückweg über die alten .reg-Dateien in _2026-08-21-PDF-Scan-Werkzeug).
