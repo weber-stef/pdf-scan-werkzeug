@@ -21,11 +21,9 @@ Windows-Integration (bei der Installation wählbar)
   Haken bei "Immer diese App verwenden" setzen - Windows schützt diese
   letzte Auswahl seit Windows 8/10 mit einem Hash, der sich nicht
   automatisch setzen lässt, dieser eine Klick bleibt also übrig.
-- Taucht der Eintrag im Dialog "Andere App auswählen" nicht auf (auf
-  manchen Rechnern zeigt Windows dort nur maschinenweite Einträge an), hilft
-  die Unteraufgabe "zusätzlich maschinenweit eintragen". Sie fragt einmal
-  per Benutzerkontensteuerung nach Administratorrechten, alles andere am
-  Setup bleibt ohne Rückfrage.
+- Das Programm wird für alle Benutzer unter Program Files installiert
+  (einmalige Bestätigung der Benutzerkontensteuerung). Die Einträge gelten
+  deshalb maschinenweit und erscheinen auch im Dialog "Andere App auswählen".
 
 Wer die Windows-Integration nachträglich ändern möchte: einfach das Setup
 erneut ausführen (überschreibt bestehende Einträge) oder über "Apps &
@@ -43,9 +41,16 @@ Funktionen des Werkzeugs
   und kopieren, Drucken (Strg+P), einzelne oder mehrere Seiten unter neuem
   Namen als eigene Datei(en) speichern
 
+Einstellungen
+-------------
+Startmenü > PDF-Scan-Werkzeug Einstellungen öffnet die Datei
+%APPDATA%\PDF-Werkzeug\einstellungen.txt im Editor. Dort lassen sich die
+Vorgaben beim Start (Ausgabe, Auflösung, OCR, Datum ...), Schrift, das
+Hell/Dunkel-Design und die Farben ändern. Änderungen gelten ab dem nächsten
+Programmstart. Ungültige Werte werden ignoriert. Löschen der Datei stellt
+die Vorgaben wieder her.
+
 Deinstallieren
 ---------------
-Über "Apps & Features" oder den Eintrag im Startmenü. Wurde die
-maschinenweite Registrierung genutzt, fragt die Deinstallation dafür noch
-einmal per Benutzerkontensteuerung nach - sie räumt diesen Teil sonst nicht
-mit auf.
+Über "Apps & Features" oder den Eintrag im Startmenü (verlangt die Bestätigung
+der Benutzerkontensteuerung).

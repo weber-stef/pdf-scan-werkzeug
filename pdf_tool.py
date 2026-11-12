@@ -35,7 +35,10 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import ordnerwahl
+import pdf_einstellungen as einst
+from pdf_einstellungen import C_HINT, C_OK, C_ERR, C_WARN, C_TXT, C_VIEW, C_EDIT, C_SIDE
 from pdf_anmerken_ui import AnnotMixin
+from pdf_beschneiden import CropMixin
 from pdf_suche import SearchMixin
 from pdf_links import LinkMixin
 
@@ -275,6 +278,7 @@ def process_pdf(src: Path, dst: Path, opts: dict, log, page_cb=None) -> None:
     del_pages = opts.get("del_pages") or set()  # {Seitenindex, …}
     page_order = opts.get("page_order")         # None oder Originalindizes in neuer Reihenfolge
     curve_pages = opts.get("curve_pages") or {}  # {Seitenindex: (Schwarz, Weiß, Gamma)}
+    angle_pages = opts.get("angle_pages") or {}  # {Seitenindex: Grad, positiv = im Uhrzeigersinn}
     dpi = opts["dpi"]
 
     def page_crop(pno: int):
@@ -295,7 +299,7 @@ def process_pdf(src: Path, dst: Path, opts: dict, log, page_cb=None) -> None:
         if 0 <= pno < len(doc) and rot % 360:
             doc[pno].set_rotation((doc[pno].rotation + rot) % 360)
 
-    raster_ops = do_ocr or do_curves or do_deskew
+    raster_ops = do_ocr or do_curves or do_deskew or bool(angle_pages)
     # Die CropBox arbeitet im ungedrehten Koordinatensystem – verlustfrei
     # zuschneiden geht daher nur auf Seiten ohne Drehung
     croppable = all(doc[pno].rotation == 0
@@ -329,7 +333,7 @@ def process_pdf(src: Path, dst: Path, opts: dict, log, page_cb=None) -> None:
         c = page_crop(pno)
 
         # Seite hat schon Text und braucht keine Bildbearbeitung: unverändert übernehmen
-        if not (do_curves or do_deskew or c) and do_ocr and has_text:
+        if not (do_curves or do_deskew or c or angle_pages.get(pno)) and do_ocr and has_text:
             out.insert_pdf(doc, from_page=pno, to_page=pno)
             if page_cb:
                 page_cb()
@@ -344,6 +348,11 @@ def process_pdf(src: Path, dst: Path, opts: dict, log, page_cb=None) -> None:
                 log(f"  Seite {pno + 1}: um {angle:+.2f}° gedreht")
                 img = img.rotate(angle, resample=Image.Resampling.BICUBIC,
                                  expand=False, fillcolor=(255, 255, 255))
+        manual = angle_pages.get(pno, 0.0)
+        if abs(manual) >= 0.05:
+            # Schieberegler: positiv = im Uhrzeigersinn, PIL dreht dagegen
+            img = img.rotate(-manual, resample=Image.Resampling.BICUBIC,
+                             expand=False, fillcolor=(255, 255, 255))
         if c:
             w, h = img.size
             img = img.crop((int(c[0] * w), int(c[1] * h),
@@ -770,7 +779,7 @@ class FileDrop:
         self.old = None
 
 
-class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
+class PdfViewer(CropMixin, LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
     """Eigenes Anzeigefenster mit Blättern, Zoom und Vollbildmodus.
 
     Tasten: F11 Vollbild, Esc Vollbild beenden/Fenster schließen,
@@ -813,6 +822,7 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
         self._sel_text = ""
         self._lines_cache = {}        # Seitenzahl -> Liste von Zeilen-BBoxen (fitz.Rect)
         self._anno_init()
+        self._crop_init()
         self._last_click = None
         self._edit_job = None
         self._search_init()
@@ -825,6 +835,24 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
         self._bind_keys()
         self.focus_set()
         self.after(50, lambda: self.show_page(0))
+        self.after(30, self._nach_vorn)
+
+    def _nach_vorn(self):
+        """Neues Fenster über die anderen offenen Programmfenster legen."""
+        try:
+            self.deiconify()
+            self.lift()
+            self.attributes("-topmost", True)
+            self.after(400, lambda: self._topmost_aus())
+            self.focus_force()
+        except tk.TclError:
+            pass
+
+    def _topmost_aus(self):
+        try:
+            self.attributes("-topmost", False)
+        except tk.TclError:
+            pass
 
     # ---------------- Aufbau ----------------
 
@@ -884,8 +912,14 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
         ttk.Button(bar, text="🖍 Kommentieren & Ändern (Strg+K)",
                    command=self.toggle_anno_bar).pack(side="right", padx=(0, 8))
 
+        ttk.Button(bar, text="✂ Beschneiden (Strg+B)",
+                   command=self.toggle_crop_bar).pack(side="right", padx=(0, 8))
+
         ttk.Button(bar, text="🖨 Drucken (Strg+P)",
                    command=self.print_document).pack(side="right", padx=(0, 8))
+
+        ttk.Button(bar, text="⇩ Verkleinern",
+                   command=self.shrink_document).pack(side="right", padx=(0, 8))
 
         ttk.Button(bar, text="▤ Seiten (F4)",
                    command=self.toggle_sidebar).pack(side="right", padx=(0, 8))
@@ -894,6 +928,7 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
                    command=self.toggle_bookmarks).pack(side="right", padx=(0, 8))
 
         self._build_anno_bar(bar)
+        self._build_crop_bar(bar)
         self._build_search_bar(bar)
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True)
@@ -901,7 +936,7 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
         body.columnconfigure(1, weight=1)
         self._build_sidebar(body)
         self._build_bookmarks(body)
-        self.canvas = tk.Canvas(body, background="#4a4a4a", highlightthickness=0,
+        self.canvas = tk.Canvas(body, background=C_VIEW, highlightthickness=0,
                                 cursor="xterm")
         self.canvas.grid(row=0, column=1, sticky="nsew")
         vsb = ttk.Scrollbar(body, orient="vertical", command=self.canvas.yview)
@@ -922,6 +957,7 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
         self.context_menu.add_separator()
         self.context_menu.add_command(label="Seite speichern unter…", command=self.save_pages)
         self.context_menu.add_command(label="Seite löschen…", command=self.delete_pages)
+        self.context_menu.add_command(label="Dateigröße verkleinern…", command=self.shrink_document)
 
         status = ttk.Frame(self, padding=(6, 2))
         status.pack(side="bottom", fill="x")
@@ -933,7 +969,7 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
                                   command=self.change_selection, state="disabled")
         self.btn_chg.pack(side="left", padx=(0, 12))
         self.sel_status = ttk.Label(status, text="Text markieren: Ziehen mit gedrückter Maustaste",
-                                    foreground="#606060")
+                                    foreground=C_HINT)
         self.sel_status.pack(side="left")
 
     def _bind_keys(self):
@@ -943,6 +979,7 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
         self.bind("<Escape>", self._on_escape)
         self.bind("<Control-z>", self.anno_undo)
         self.bind("<Control-k>", lambda e: self.toggle_anno_bar())
+        self.bind("<Control-b>", lambda e: self.toggle_crop_bar())
         self.bind("<Control-f>", lambda e: self.open_search())
         self.bind("<Control-h>", lambda e: self.open_replace())
         self.bind("<F2>", lambda e: self.change_selection())
@@ -978,6 +1015,9 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
         """Entf löscht Seiten – nicht, während ein Eingabefeld (Seitenzahl) den Fokus hat."""
         if self._typing():
             return
+        if self.crop_active():
+            self.crop_clear()      # Entf löscht im Beschneiden nie die Seite
+            return
         if self._anno_selected_rec():
             self._anno_delete_selected()
             return
@@ -997,6 +1037,7 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
         if pno != self.page_no:
             self._clear_selection()
             self._anno_sel = None
+            self._crop_rect = None
         self.page_no = max(0, min(pno, len(self.doc) - 1))
         self._render()
         self.canvas.yview_moveto(1.0 if at_end else 0.0)
@@ -1034,6 +1075,7 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
             self._draw_selection_rects(self._sel_page_rects)
         self._search_draw()
         self._anno_draw_sel()
+        self._crop_draw()
         self._update_toolbar()
         self._thumbs_mark()
 
@@ -1167,6 +1209,8 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
     def _sel_press(self, ev):
         if not self.doc:
             return
+        if self.crop_active():
+            return self._crop_press(ev)
         if not self._anno_editor:
             # Tastatur (Entf, Enter, Esc) gehört ab jetzt der Seitenansicht, nicht mehr
             # einem Feld der Werkzeugleiste, in das zuletzt getippt wurde
@@ -1193,6 +1237,8 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
         self.canvas.delete("selrect")
 
     def _sel_drag(self, ev):
+        if self.crop_active():
+            return self._crop_drag(ev)
         if self._anno_routing():
             return self._anno_drag(ev)
         if not self._sel_start or not self.doc:
@@ -1204,6 +1250,8 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
         self._draw_selection_rects(rects)
 
     def _sel_release(self, ev):
+        if self.crop_active():
+            return self._crop_release(ev)
         if self._anno_routing():
             return self._anno_release(ev)
         if not self._sel_start or not self.doc:
@@ -1254,12 +1302,12 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
             if len(preview) > 60:
                 preview = preview[:57] + "…"
             self.sel_status.config(
-                text=f"✓ In Zwischenablage kopiert: „{preview}“", foreground="#107010")
+                text=f"✓ In Zwischenablage kopiert: „{preview}“", foreground=C_OK)
         else:
             self.btn_copy.config(state="disabled")
             self.btn_chg.config(state="disabled")
             self.sel_status.config(text="Kein Text im markierten Bereich gefunden.",
-                                   foreground="#a00000")
+                                   foreground=C_ERR)
 
     def _clear_selection(self):
         self.canvas.delete("selrect")
@@ -1269,7 +1317,7 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
         self.btn_copy.config(state="disabled")
         self.btn_chg.config(state="disabled")
         self.sel_status.config(text="Text markieren: Ziehen mit gedrückter Maustaste",
-                               foreground="#606060")
+                               foreground=C_HINT)
 
     def copy_selection(self, silent: bool = False):
         if not self._sel_text:
@@ -1278,7 +1326,7 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
         self.clipboard_append(self._sel_text)
         if not silent:
             self.sel_status.config(text="✓ In Zwischenablage kopiert.",
-                                   foreground="#107010")
+                                   foreground=C_OK)
 
     def _show_context_menu(self, ev):
         self.context_menu.entryconfig(
@@ -1346,6 +1394,13 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
         if not self.doc:
             return
         PrintDialog(self, self.path, len(self.doc), self.page_no)
+
+    def shrink_document(self):
+        """Fenster zum Verkleinern der Dateigröße (Zielgröße in MB oder Qualität)."""
+        if not self.doc:
+            return
+        from pdf_verkleinern import ShrinkDialog
+        ShrinkDialog(self, self.path, self.doc)
 
     # ---------------- Seite speichern ----------------
 
@@ -1476,7 +1531,7 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
         self.sidebar.grid_propagate(False)
         self.sidebar.rowconfigure(0, weight=1)
         self.sidebar.columnconfigure(0, weight=1)
-        self.side = tk.Canvas(self.sidebar, background="#2e2e2e", highlightthickness=0,
+        self.side = tk.Canvas(self.sidebar, background=C_SIDE, highlightthickness=0,
                               width=self.SIDEBAR_W - 16)
         self.side.grid(row=0, column=0, sticky="nsew")
         ssb = ttk.Scrollbar(self.sidebar, orient="vertical", command=self.side.yview)
@@ -1541,6 +1596,26 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
                 quellen.append((p, open_as_pdf(p)))
             except Exception as exc:
                 uebersprungen.append(f"{p.name} ({str(exc) or type(exc).__name__})")
+        self._insert_sources(quellen, uebersprungen, pos)
+
+    def insert_pages_from(self, other, page_idx: int, pos: int):
+        """Fügt Seite page_idx (0-basiert) des Fensters other vor Seite pos in
+        diese PDF ein (Ziehen einer Miniatur von einem Fenster ins andere)."""
+        if not self.doc or not other.doc:
+            return
+        try:
+            src = fitz.open()
+            src.insert_pdf(other.doc, from_page=page_idx, to_page=page_idx)
+        except Exception as exc:
+            messagebox.showerror(APP_TITLE, f"Seite konnte nicht übernommen werden:\n{exc}",
+                                 parent=self)
+            return
+        self._insert_sources([(other.path, src)], [], max(0, min(pos, len(self.doc))))
+
+    def _insert_sources(self, quellen, uebersprungen, pos):
+        if not self.doc:
+            return
+        pos = max(0, min(pos, len(self.doc)))
         if not quellen:
             if uebersprungen:
                 messagebox.showwarning(APP_TITLE, "Nichts eingefügt:\n" + "\n".join(uebersprungen),
@@ -1701,6 +1776,22 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
         if not self._drag_active and abs(ev.y - self._drag_y0) < 6:
             return
         self._drag_active = True
+        tv, tpos = self._foreign_target(ev)
+        old = getattr(self, "_xtarget", None)
+        if old and (tv is None or old[0] is not tv):
+            old[0].side.delete("dropline")
+        if tv is not None:
+            self._xtarget = (tv, tpos)
+            self.side.delete("dropline")
+            self.side.config(cursor="plus")
+            tv.side.delete("dropline")
+            y = tpos * self.SLOT_H
+            tv.side.create_line(4, y, self.SIDEBAR_W - 20, y, fill="#ff9d2e", width=4,
+                                tags=("dropline",))
+            tv.side.yview_scroll(0, "units")
+            return
+        self._xtarget = None
+        self.side.config(cursor="")
         h = self.side.winfo_height()
         if ev.y < 20:
             self.side.yview_scroll(-1, "units")
@@ -1719,9 +1810,48 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
         self._drag_src = self._drag_target = None
         self._drag_active = False
         self.side.delete("dropline")
+        self.side.config(cursor="")
+        xt = getattr(self, "_xtarget", None)
+        self._xtarget = None
+        if xt is not None:
+            tv, tpos = xt
+            tv.side.delete("dropline")
+            if src is not None and aktiv and tv.doc:
+                tv.lift()
+                tv.insert_pages_from(self, src, tpos)
+            return
         if src is None or not aktiv or t is None:
             return
         self.move_page(src, t if t <= src else t - 1)
+
+    def _foreign_target(self, ev):
+        """Liegt der Mauszeiger über der Seitenleiste oder Seitenansicht eines
+        anderen PdfViewer-Fensters? Dann (Fenster, Einfügeposition), sonst (None, 0)."""
+        try:
+            w = self.winfo_containing(ev.x_root, ev.y_root)
+        except Exception:
+            return None, 0
+        while w is not None:
+            if isinstance(w, PdfViewer):
+                break
+            w = getattr(w, "master", None)
+        else:
+            return None, 0
+        if w is self or not w.doc:
+            return None, 0
+        try:
+            sx, sy = w.side.winfo_rootx(), w.side.winfo_rooty()
+            if (sx <= ev.x_root < sx + w.side.winfo_width()
+                    and sy <= ev.y_root < sy + w.side.winfo_height()):
+                cy = w.side.canvasy(ev.y_root - sy)
+                return w, max(0, min(int(round(cy / self.SLOT_H)), len(w.doc)))
+            cx, cy0 = w.canvas.winfo_rootx(), w.canvas.winfo_rooty()
+            if (cx <= ev.x_root < cx + w.canvas.winfo_width()
+                    and cy0 <= ev.y_root < cy0 + w.canvas.winfo_height()):
+                return w, min(w.page_no + 1, len(w.doc))
+        except Exception:
+            pass
+        return None, 0
 
     def _side_menu(self, ev):
         if not self.doc:
@@ -1800,6 +1930,9 @@ class PdfViewer(LinkMixin, SearchMixin, AnnotMixin, tk.Toplevel):
                              else "⛶ Vollbild (F11)")
 
     def _on_escape(self, _ev=None):
+        if self.crop_active():
+            self.crop_escape()
+            return
         if self._anno_sel:
             self._anno_select(None)
             return
@@ -1912,7 +2045,7 @@ class PrintDialog(tk.Toplevel):
         ent.grid(row=2, column=1, sticky="w", padx=(4, 0))
         # Tippen im Feld waehlt den passenden Knopf gleich mit aus
         ent.bind("<FocusIn>", lambda e: self.var_scope.set("bereich"))
-        ttk.Label(seiten, text="z. B. 1,3,5-8", foreground="gray")\
+        ttk.Label(seiten, text="z. B. 1,3,5-8", foreground=C_HINT)\
             .grid(row=3, column=1, sticky="w", padx=(4, 0))
 
         unten = ttk.Frame(frm)
@@ -1925,7 +2058,7 @@ class PrintDialog(tk.Toplevel):
 
         self.progress = ttk.Progressbar(frm, mode="determinate")
         self.progress.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(10, 2))
-        self.status = ttk.Label(frm, text="", foreground="gray")
+        self.status = ttk.Label(frm, text="", foreground=C_HINT)
         self.status.grid(row=5, column=0, columnspan=3, sticky="w")
 
         knoepfe = ttk.Frame(frm)
@@ -2080,7 +2213,7 @@ class SavePagesDialog(tk.Toplevel):
         ent.grid(row=1, column=1, sticky="w", padx=(4, 0))
         # Tippen im Feld waehlt den passenden Knopf gleich mit aus
         ent.bind("<FocusIn>", lambda e: self.var_scope.set("bereich"))
-        ttk.Label(seiten, text="z. B. 1,3,5-8", foreground="gray")\
+        ttk.Label(seiten, text="z. B. 1,3,5-8", foreground=C_HINT)\
             .grid(row=2, column=1, sticky="w", padx=(4, 0))
         ttk.Radiobutton(seiten, text=f"Alle ({self.total})", value="alle",
                         variable=self.var_scope)\
@@ -2104,7 +2237,7 @@ class SavePagesDialog(tk.Toplevel):
         ttk.Label(name_frame,
                   text="Bei einer Seite oder \"in einer Datei\" wird genau dieser Name "
                        "verwendet, bei eigenen Dateien je Seite wird _S1, _S2 … angehängt.",
-                  foreground="gray").grid(row=1, column=0, sticky="w", pady=(4, 0))
+                  foreground=C_HINT).grid(row=1, column=0, sticky="w", pady=(4, 0))
 
         ziel = ttk.Labelframe(frm, text="Zielordner", padding=6)
         ziel.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(8, 0))
@@ -2113,7 +2246,7 @@ class SavePagesDialog(tk.Toplevel):
         ttk.Button(ziel, text="Durchsuchen…", command=self._pick_folder)\
             .grid(row=0, column=1, padx=(6, 0))
 
-        ttk.Label(ziel, text="Bereits vorhandene Dateien:", foreground="gray")\
+        ttk.Label(ziel, text="Bereits vorhandene Dateien:", foreground=C_HINT)\
             .grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
         liste = ttk.Frame(ziel)
         liste.grid(row=2, column=0, columnspan=2, sticky="ew")
@@ -2124,7 +2257,7 @@ class SavePagesDialog(tk.Toplevel):
         sb.grid(row=0, column=1, sticky="ns")
         self.lst_files.config(yscrollcommand=sb.set)
 
-        self.status = ttk.Label(frm, text="", foreground="gray")
+        self.status = ttk.Label(frm, text="", foreground=C_HINT)
         self.status.grid(row=5, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
         knoepfe = ttk.Frame(frm)
@@ -2283,7 +2416,7 @@ class DeletePagesDialog(tk.Toplevel):
         ent = ttk.Entry(seiten, textvariable=self.var_range, width=18)
         ent.grid(row=1, column=1, sticky="w", padx=(4, 0))
         ent.bind("<FocusIn>", lambda e: self.var_scope.set("bereich"))
-        ttk.Label(seiten, text="z. B. 1,3,5-8", foreground="gray")\
+        ttk.Label(seiten, text="z. B. 1,3,5-8", foreground=C_HINT)\
             .grid(row=2, column=1, sticky="w", padx=(4, 0))
 
         modus = ttk.Labelframe(frm, text="Was soll passieren", padding=6)
@@ -2302,10 +2435,10 @@ class DeletePagesDialog(tk.Toplevel):
         self.ent_name = ttk.Entry(modus, textvariable=self.var_name)
         self.ent_name.grid(row=3, column=0, sticky="ew", padx=(22, 0), pady=(2, 0))
         ttk.Label(modus, text=f"Wird im gleichen Ordner gespeichert ({self.path.parent}).",
-                  foreground="gray", wraplength=420, justify="left")\
+                  foreground=C_HINT, wraplength=420, justify="left")\
             .grid(row=4, column=0, sticky="w", padx=(22, 0))
 
-        self.status = ttk.Label(frm, text="", foreground="gray")
+        self.status = ttk.Label(frm, text="", foreground=C_HINT)
         self.status.grid(row=2, column=0, sticky="w", pady=(8, 0))
 
         knoepfe = ttk.Frame(frm)
@@ -2379,7 +2512,7 @@ class DeletePagesDialog(tk.Toplevel):
         except Exception as exc:
             messagebox.showerror(APP_TITLE, f"Löschen fehlgeschlagen:\n{exc}", parent=self)
             return
-        self.status.config(text=ergebnis, foreground="#006000")
+        self.status.config(text=ergebnis, foreground=C_OK)
         self.btn_delete.config(state="disabled")
         self.after(1400, self.destroy)
 
@@ -2491,7 +2624,7 @@ class MergeDialog(tk.Toplevel):
         self.btn_merge = ttk.Button(unten, text="▶  Zusammenfassen", command=self.do_merge)
         self.btn_merge.pack(side="left")
         ttk.Button(unten, text="Abbrechen", command=self.destroy).pack(side="right")
-        self.info = ttk.Label(unten, text="", foreground="gray")
+        self.info = ttk.Label(unten, text="", foreground=C_HINT)
         self.info.pack(side="left", padx=10)
 
     # ---------------- Liste ----------------
@@ -2619,6 +2752,7 @@ class MergeDialog(tk.Toplevel):
 class PdfToolApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        einst.anwenden(self)
         self.title(APP_TITLE)
         self.geometry("1180x760")
         self.minsize(980, 640)
@@ -2632,6 +2766,9 @@ class PdfToolApp(tk.Tk):
         self.crop_pages: dict[Path, dict[int, tuple]] = {}   # Bereiche je Datei/Seite
         self.page_rot: dict[Path, dict[int, int]] = {}       # Drehung je Datei/Seite
         self.page_curves: dict[Path, dict[int, tuple]] = {}  # eigene Gradation je Seite
+        self.page_angle: dict[Path, dict[int, float]] = {}   # Feindrehung (Schieberegler) je Seite
+        self._angle_guard = False
+        self._angle_job = None
         self._global_curves = (0, 255, 1.0)                  # Werte für alle anderen Seiten
         self.page_del: dict[Path, set[int]] = {}             # zu löschende Seiten
         self.page_order: dict[Path, list[int]] = {}          # neue Seitenreihenfolge (Originalindizes)
@@ -2684,19 +2821,19 @@ class PdfToolApp(tk.Tk):
         opts = ttk.LabelFrame(root, text=" 2. Optionen ", padding=6)
         opts.grid(row=0, column=1, sticky="nsw", padx=(0, 8))
 
-        self.var_ocr = tk.BooleanVar(value=False)
-        self.var_curves = tk.BooleanVar(value=False)
-        self.var_deskew = tk.BooleanVar(value=False)
+        self.var_ocr = tk.BooleanVar(value=einst.ja("ocr"))
+        self.var_curves = tk.BooleanVar(value=einst.ja("gradationskurven"))
+        self.var_deskew = tk.BooleanVar(value=einst.ja("gerade_ausrichten"))
         self.var_crop = tk.BooleanVar(value=False)
         self.var_rename = tk.BooleanVar(value=False)
-        self.var_date = tk.BooleanVar(value=False)
+        self.var_date = tk.BooleanVar(value=einst.ja("datum_anfuegen"))
 
         row = 0
         ttk.Checkbutton(opts, text="OCR-Texterkennung", variable=self.var_ocr)\
             .grid(row=row, column=0, columnspan=2, sticky="w"); row += 1
         lang_row = ttk.Frame(opts); lang_row.grid(row=row, column=0, columnspan=2, sticky="w"); row += 1
         ttk.Label(lang_row, text="    Sprache:").pack(side="left")
-        self.var_lang = tk.StringVar(value="deu+eng")
+        self.var_lang = tk.StringVar(value=einst.S["ocr_sprache"])
         ttk.Entry(lang_row, textvariable=self.var_lang, width=10).pack(side="left")
 
         ttk.Separator(opts).grid(row=row, column=0, columnspan=2, sticky="ew", pady=4); row += 1
@@ -2722,10 +2859,29 @@ class PdfToolApp(tk.Tk):
                                         command=self.toggle_page_curves)
         self.btn_pagecurve.grid(row=row, column=0, columnspan=2, sticky="ew",
                                 padx=(20, 0), pady=(2, 0)); row += 1
-        self.pagecurve_label = ttk.Label(opts, text="", foreground="#b05000")
+        self.pagecurve_label = ttk.Label(opts, text="", foreground=C_WARN)
         self.pagecurve_label.grid(row=row, column=0, columnspan=2, sticky="w"); row += 1
 
         ttk.Separator(opts).grid(row=row, column=0, columnspan=2, sticky="ew", pady=4); row += 1
+
+        ttk.Label(opts, text="Seite gerade drehen (diese Seite):")            .grid(row=row, column=0, columnspan=2, sticky="w"); row += 1
+        self.var_angle = tk.DoubleVar(value=0.0)
+        self.scale_angle = tk.Scale(opts, variable=self.var_angle, from_=-15.0, to=15.0,
+                                    resolution=float(einst.S["dreh_regler_schritt"]), orient="horizontal", length=220,
+                                    showvalue=True, command=self._on_angle_slider)
+        self.scale_angle.grid(row=row, column=0, columnspan=2, sticky="ew", padx=(20, 0))
+        self.scale_angle.bind("<Double-Button-1>", lambda e: self._reset_angle())
+        self.scale_angle.bind("<Button-1>", lambda e: self.scale_angle.focus_set(), add="+")
+        self.scale_angle.bind("<Left>", lambda e: self._angle_step(-float(einst.S["dreh_regler_schritt"])) or "break")
+        self.scale_angle.bind("<Right>", lambda e: self._angle_step(float(einst.S["dreh_regler_schritt"])) or "break")
+        self.scale_angle.bind("<Down>", lambda e: self._angle_step(-float(einst.S["dreh_regler_schritt"])) or "break")
+        self.scale_angle.bind("<Up>", lambda e: self._angle_step(float(einst.S["dreh_regler_schritt"])) or "break")
+        row += 1
+        ttk.Label(opts, text="    ◀ gegen den Uhrzeiger   |   im Uhrzeiger ▶",
+                  foreground=C_HINT).grid(row=row, column=0, columnspan=2, sticky="w"); row += 1
+        ttk.Button(opts, text="Drehung zurücksetzen (Mitte)", command=self._reset_angle)            .grid(row=row, column=0, columnspan=2, sticky="ew", padx=(20, 0)); row += 1
+        ttk.Label(opts, text="    Erst ausrichten, danach den Bereich freistellen.",
+                  foreground=C_HINT).grid(row=row, column=0, columnspan=2, sticky="w"); row += 1
 
         ttk.Checkbutton(opts, text="Gerade ausrichten (automatisch)",
                         variable=self.var_deskew, command=self.update_preview)\
@@ -2742,7 +2898,7 @@ class PdfToolApp(tk.Tk):
                         variable=self.var_crop_scope, command=self._on_crop_scope)\
             .grid(row=row, column=0, columnspan=2, sticky="w"); row += 1
         self.crop_label = ttk.Label(opts, text="    (Rechteck in der Vorschau aufziehen)",
-                                    foreground="gray")
+                                    foreground=C_HINT)
         self.crop_label.grid(row=row, column=0, columnspan=2, sticky="w"); row += 1
 
         ttk.Separator(opts).grid(row=row, column=0, columnspan=2, sticky="ew", pady=4); row += 1
@@ -2753,11 +2909,11 @@ class PdfToolApp(tk.Tk):
         ttk.Entry(opts, textvariable=self.var_newname, width=28)\
             .grid(row=row, column=0, columnspan=2, sticky="ew", padx=(20, 0)); row += 1
         ttk.Label(opts, text="    (mehrere Dateien werden nummeriert)",
-                  foreground="gray").grid(row=row, column=0, columnspan=2, sticky="w"); row += 1
+                  foreground=C_HINT).grid(row=row, column=0, columnspan=2, sticky="w"); row += 1
 
         ttk.Checkbutton(opts, text="Datum anfügen (_YYYY-MM-DD)", variable=self.var_date)\
             .grid(row=row, column=0, columnspan=2, sticky="w"); row += 1
-        self.var_datesrc = tk.StringVar(value="file")
+        self.var_datesrc = tk.StringVar(value="file" if einst.S["datum_quelle"] == "datei" else "today")
         ttk.Radiobutton(opts, text="    Datei-Änderungsdatum", value="file",
                         variable=self.var_datesrc)\
             .grid(row=row, column=0, columnspan=2, sticky="w"); row += 1
@@ -2768,7 +2924,7 @@ class PdfToolApp(tk.Tk):
         ttk.Separator(opts).grid(row=row, column=0, columnspan=2, sticky="ew", pady=4); row += 1
 
         ttk.Label(opts, text="Ausgabe:").grid(row=row, column=0, columnspan=2, sticky="w"); row += 1
-        self.var_output = tk.StringVar(value="subfolder")
+        self.var_output = tk.StringVar(value=einst.ausgabe_wert())
         ttk.Radiobutton(opts, text="    Unterordner „bearbeitet“", value="subfolder",
                         variable=self.var_output)\
             .grid(row=row, column=0, columnspan=2, sticky="w"); row += 1
@@ -2782,8 +2938,8 @@ class PdfToolApp(tk.Tk):
         dpi_row = ttk.Frame(opts); dpi_row.grid(row=row, column=0, columnspan=2,
                                                 sticky="w", pady=(4, 0)); row += 1
         ttk.Label(dpi_row, text="Auflösung (dpi):").pack(side="left")
-        self.var_dpi = tk.IntVar(value=200)
-        ttk.Combobox(dpi_row, textvariable=self.var_dpi, values=(150, 200, 300),
+        self.var_dpi = tk.IntVar(value=int(einst.S["dpi"]))
+        ttk.Combobox(dpi_row, textvariable=self.var_dpi, values=sorted({150, 200, 300, int(einst.S["dpi"])}),
                      width=5, state="readonly").pack(side="left", padx=4)
 
         self.btn_run = ttk.Button(opts, text="▶  Verarbeiten", command=self.run)
@@ -2810,7 +2966,7 @@ class PdfToolApp(tk.Tk):
         prev_frame.rowconfigure(0, weight=1)
         prev_frame.columnconfigure(1, weight=1)
         self._build_pside(prev_frame)
-        self.canvas = tk.Canvas(prev_frame, background="#606060", highlightthickness=0)
+        self.canvas = tk.Canvas(prev_frame, background=C_EDIT, highlightthickness=0)
         self.canvas.grid(row=0, column=1, sticky="nsew")
         self.canvas.bind("<Configure>", lambda e: self.update_preview())
         self.canvas.bind("<ButtonPress-1>", self._crop_press)
@@ -2843,7 +2999,7 @@ class PdfToolApp(tk.Tk):
         self.btn_delpage.pack(side="left")
         ttk.Button(nav, text="💾 Seite speichern…",
                    command=self.save_page_from_editor).pack(side="left", padx=(8, 0))
-        self.page_status = ttk.Label(nav, text="", foreground="#b00000")
+        self.page_status = ttk.Label(nav, text="", foreground=C_ERR)
         self.page_status.pack(side="left", padx=8)
 
         self.bind("<Prior>", lambda e: self.change_page(-1))   # Bild-auf
@@ -2889,6 +3045,7 @@ class PdfToolApp(tk.Tk):
             self.crop_pages.pop(self.files[idx], None)
             self.page_rot.pop(self.files[idx], None)
             self.page_curves.pop(self.files[idx], None)
+            self.page_angle.pop(self.files[idx], None)
             self.page_del.pop(self.files[idx], None)
             self.page_order.pop(self.files[idx], None)
             del self.files[idx]
@@ -2900,6 +3057,7 @@ class PdfToolApp(tk.Tk):
         self.crop_pages.clear()
         self.page_rot.clear()
         self.page_curves.clear()
+        self.page_angle.clear()
         self.page_del.clear()
         self.page_order.clear()
         self.update_preview()
@@ -2936,7 +3094,7 @@ class PdfToolApp(tk.Tk):
         fr.grid_propagate(False)
         fr.rowconfigure(0, weight=1)
         fr.columnconfigure(0, weight=1)
-        self.pside = tk.Canvas(fr, background="#2e2e2e", highlightthickness=0)
+        self.pside = tk.Canvas(fr, background=C_SIDE, highlightthickness=0)
         self.pside.grid(row=0, column=0, sticky="nsew")
         sb = ttk.Scrollbar(fr, orient="vertical", command=self.pside.yview)
         sb.grid(row=0, column=1, sticky="ns")
@@ -3185,6 +3343,48 @@ class PdfToolApp(tk.Tk):
         self.btn_delpage.config(
             text="Seite wiederherstellen" if deleted else "Seite löschen")
 
+    def _on_angle_slider(self, value):
+        if self._angle_guard:
+            return
+        f = self._current_file()
+        if not f:
+            return
+        st = float(einst.S["dreh_regler_schritt"])
+        v = round(round(float(value) / st) * st, 3)
+        d = self.page_angle.setdefault(f, {})
+        if abs(v) >= 0.05:
+            d[self.preview_page] = v
+        else:
+            d.pop(self.preview_page, None)
+        if self._angle_job:
+            self.after_cancel(self._angle_job)
+        self._angle_job = self.after(60, self._angle_refresh)
+
+    def _angle_step(self, delta):
+        st = float(einst.S["dreh_regler_schritt"])
+        v = round((self.var_angle.get() + delta) / st) * st
+        v = max(-15.0, min(15.0, v))
+        self.var_angle.set(v)
+        self._on_angle_slider(v)
+
+    def _angle_refresh(self):
+        self._angle_job = None
+        self.update_preview()
+
+    def _reset_angle(self):
+        f = self._current_file()
+        if f:
+            self.page_angle.get(f, {}).pop(self.preview_page, None)
+        self.update_preview()
+
+    def _load_angle_slider(self, f):
+        v = self.page_angle.get(f, {}).get(self.preview_page, 0.0) if f else 0.0
+        self._angle_guard = True
+        try:
+            self.var_angle.set(v)
+        finally:
+            self._angle_guard = False
+
     def rotate_page(self, delta: int):
         """Merkt für die angezeigte Seite eine Drehung um delta Grad vor."""
         f = self._current_file()
@@ -3317,6 +3517,11 @@ class PdfToolApp(tk.Tk):
             if abs(angle) >= 0.1:
                 img = img.rotate(angle, resample=Image.Resampling.BICUBIC,
                                  expand=False, fillcolor=(255, 255, 255))
+        self._load_angle_slider(f)
+        manual = self.page_angle.get(f, {}).get(self.preview_page, 0.0)
+        if abs(manual) >= 0.05:
+            img = img.rotate(-manual, resample=Image.Resampling.BICUBIC,
+                             expand=False, fillcolor=(255, 255, 255))
         self._load_curve_sliders()
         if self.var_curves.get():
             img = apply_curves(img, self.var_black.get(),
@@ -3463,6 +3668,7 @@ class PdfToolApp(tk.Tk):
             has_crop = bool(self.crop_frac)
 
         has_rotdel = any(self.page_rot.get(f) or self.page_del.get(f)
+                         or self.page_angle.get(f)
                          or self._reordered(f) for f in self.files)
         content_ops = (self.var_ocr.get() or self.var_curves.get()
                        or self.var_deskew.get()
@@ -3496,6 +3702,7 @@ class PdfToolApp(tk.Tk):
                            if crop_active and crop_scope == "page" else {}),
             "rot_pages": {f: dict(d) for f, d in self.page_rot.items() if d},
             "curve_pages": {f: dict(d) for f, d in self.page_curves.items() if d},
+            "angle_pages": {f: dict(d) for f, d in self.page_angle.items() if d},
             "del_pages": {f: set(s) for f, s in self.page_del.items() if s},
             "page_order": {f: list(o) for f, o in self.page_order.items()
                            if self._reordered(f)},
@@ -3588,7 +3795,8 @@ class PdfToolApp(tk.Tk):
             file_rot = opts["rot_pages"].get(src, {})
             file_del = opts["del_pages"].get(src, set())
             file_order = opts["page_order"].get(src)
-            file_ops = (opts["ocr"] or opts["curves"] or opts["deskew"]
+            file_angle = opts["angle_pages"].get(src, {})
+            file_ops = (opts["ocr"] or opts["curves"] or opts["deskew"] or bool(file_angle)
                         or file_crop is not None or bool(file_rot) or bool(file_del)
                         or bool(file_order))
             dst = self._output_path(src, opts, i, len(files))
@@ -3622,7 +3830,8 @@ class PdfToolApp(tk.Tk):
                                 dict(opts, crop=file_crop,
                                      rot_pages=file_rot, del_pages=file_del,
                                      page_order=file_order,
-                                     curve_pages=opts["curve_pages"].get(src, {})),
+                                     curve_pages=opts["curve_pages"].get(src, {}),
+                                     angle_pages=file_angle),
                                 self.log, page_cb=page_done)
                     if opts["output"] == "replace":
                         if dst != src and src.exists():
@@ -3825,6 +4034,9 @@ class PdfToolApp(tk.Tk):
 
 if __name__ == "__main__":
     cli_args = sys.argv[1:]
+    if "--einstellungen" in cli_args:
+        einst.einstellungen_oeffnen()
+        sys.exit(0)
     cli_view = "--view" in cli_args
     cli_merge = "--merge" in cli_args
     cli_paths = [a for a in cli_args if a not in ("--view", "--merge")]

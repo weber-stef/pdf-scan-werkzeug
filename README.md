@@ -279,7 +279,6 @@ In der Suchleiste „Ersetzen ▾“ (oder Strg+H) blendet eine zweite Zeile ein
 ## Markieren (Korrektur)
 Senkrecht stehende Textzeilen werden bei der Auswahl ignoriert; bei mehreren Spalten gilt die waagerecht nächste Zeile.
 
-## Versionen und Installer
+## Beschneiden im Betrachter (seit 05.11.2026)
 
-Die Setups (Inno Setup, PyInstaller-Paket, ab Windows 10) liegen als Dateien bei den Releases v1.0.0 bis v1.3.2. Gebaut wird mit installer/bauen.ps1. Das Setup ist nicht signiert, SmartScreen meldet beim ersten Start Unbekannter Herausgeber.
-
+Knopf „✂ Beschneiden“ (Strg+B) öffnet eine eigene Leiste. Auf der Seite ein Rechteck aufziehen, mit den Anfassern an Ecken und Kanten nachziehen, im Rechteck ziehen verschiebt es. Die Leiste zeigt die Größe und die Ränder in mm. „Zuschneiden“ (oder Enter) setzt verlustfrei die CropBox, entweder nur dieser Seite oder allen Seiten mit gleichen Anteilen (gedrehte Seiten werden richtig umgerechnet). „Zuschnitt entfernen“ stellt die volle Seite wieder her. Die Datei wird sofort geändert, Strg+Z macht es rückgängig. Esc hebt die Auswahl auf, ein zweites Esc schließt die Leiste; Entf löscht hier nie die Seite. Hinweis: Die CropBox blendet nur aus, der Inhalt bleibt in der Datei. Modul `pdf_beschneiden.py`.

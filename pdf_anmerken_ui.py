@@ -12,6 +12,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 from pathlib import Path
 from tkinter import ttk, colorchooser, messagebox
+from pdf_einstellungen import C_HINT, C_OK, C_ERR, C_WARN, C_TXT
 
 import fitz
 
@@ -73,7 +74,7 @@ class TextEditDialog(tk.Toplevel):
         self.color = info["color"]
         pad = {"padx": 8, "pady": 4}
         ttk.Label(self, text=f"Ursprüngliche Schrift: {info['font'] or '?'}, "
-                             f"{info['size']:.1f} pt", foreground="#606060").grid(
+                             f"{info['size']:.1f} pt", foreground=C_HINT).grid(
             row=0, column=0, columnspan=6, sticky="w", **pad)
         self.var_text = tk.StringVar(value=info["text"])
         self.ent = ttk.Entry(self, textvariable=self.var_text, width=60)
@@ -192,6 +193,8 @@ class AnnotMixin:
             self._tool_changed()
             self.anno_bar.pack_forget()
         else:
+            if getattr(self, "_crop_on", False):
+                self._crop_close()
             self.anno_bar.pack(side="top", fill="x", after=self._anno_after)
 
     def _pick_color(self):
@@ -212,7 +215,7 @@ class AnnotMixin:
             self._anno_select(None)
         else:
             self._clear_selection()
-        self.sel_status.config(text=HINWEISE[self.tool], foreground="#606060")
+        self.sel_status.config(text=HINWEISE[self.tool], foreground=C_HINT)
 
     def _typing(self):
         try:
@@ -271,6 +274,9 @@ class AnnotMixin:
     def _key_enter(self, _ev=None):
         """Enter öffnet den ausgewählten Text-Kommentar zum Bearbeiten."""
         if self._typing() or self._anno_editor:
+            return
+        if getattr(self, "_crop_on", False):
+            self.crop_apply()
             return
         rec = self._anno_selected_rec()
         if rec and rec.get("kind", "text") == "text":
@@ -493,11 +499,11 @@ class AnnotMixin:
         if rec and rec.get("kind") == "burned":
             self.sel_status.config(
                 text="Fester Text im Seiteninhalt ausgewählt: Entf löscht die Zeile (der Scan "
-                     "bleibt), Strg+Z macht es rückgängig", foreground="#606060")
+                     "bleibt), Strg+Z macht es rückgängig", foreground=C_HINT)
         elif rec and rec.get("kind", "text") == "text":
             self.sel_status.config(
                 text="Text ausgewählt: Entf löscht ihn, Ziehen verschiebt, Doppelklick oder "
-                     "Enter bearbeitet, Esc hebt die Auswahl auf", foreground="#606060")
+                     "Enter bearbeitet, Esc hebt die Auswahl auf", foreground=C_HINT)
         elif rec:
             self.anno_color = tuple(rec["color"])
             self.btn_color.config(bg=rgb_to_hex(self.anno_color))
@@ -505,7 +511,7 @@ class AnnotMixin:
             self.var_filled.set(rec["filled"])
             self.sel_status.config(
                 text="Ausgewählt: Ecken/Enden ziehen = Größe, Farbe/Stärke/Füllung oben "
-                     "ändern, Entf löscht, Esc hebt die Auswahl auf", foreground="#606060")
+                     "ändern, Entf löscht, Esc hebt die Auswahl auf", foreground=C_HINT)
         self._anno_draw_sel()
 
     def _anno_draw_sel(self):
@@ -581,7 +587,7 @@ class AnnotMixin:
                                rec=rec, text=rec["text"], min_h=box.height)
         self.sel_status.config(
             text="Text bearbeiten – Schrift/Farbe oben ändern, Strg+Enter übernimmt, "
-                 "Esc bricht ab, leerer Text löscht ihn", foreground="#606060")
+                 "Esc bricht ab, leerer Text löscht ihn", foreground=C_HINT)
 
     def _anno_open_editor(self, pos, breite, rec=None, text="", min_h=0.0):
         s = self._render_scale
@@ -676,7 +682,7 @@ class AnnotMixin:
             self.sel_status.config(
                 text="Hier gibt es keinen Text. (Bei reinen Scans ohne Texterkennung "
                      "ist nichts änderbar – dort stattdessen die Schreibmaschine nehmen.)",
-                foreground="#a00000")
+                foreground=C_ERR)
             return
         fam, bold, italic = match_font(info["font"], info["flags"])
         dlg = TextEditDialog(self, info, fam, bold, italic)
@@ -736,7 +742,7 @@ class AnnotMixin:
         hinweis = meldung
         if self._anno_backup_name and len(self._anno_undo) == 1:
             hinweis += f" – Sicherung: {self._anno_backup_name}"
-        self.sel_status.config(text="✓ " + hinweis, foreground="#107010")
+        self.sel_status.config(text="✓ " + hinweis, foreground=C_OK)
         return True
 
     @staticmethod
@@ -788,4 +794,4 @@ class AnnotMixin:
         self.doc = fitz.open(self.path)
         self.btn_undo.config(state="normal" if self._anno_undo else "disabled")
         self._anno_refresh(min(pno, len(self.doc) - 1))
-        self.sel_status.config(text="↶ Rückgängig gemacht", foreground="#107010")
+        self.sel_status.config(text="↶ Rückgängig gemacht", foreground=C_OK)

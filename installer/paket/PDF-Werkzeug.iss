@@ -3,14 +3,12 @@
 ; Gebaut wird das ueber bauen.ps1 im uebergeordneten Ordner, nicht von Hand -
 ; das Skript legt vorher den Programmordner unter paket\programm an.
 ;
-; Installiert wird ohne Adminrechte in den Benutzerordner. Die drei
-; Kontextmenue-Eintraege und die Registrierung als waehlbares
-; Standardprogramm laufen ueber HKCU und brauchen deshalb ebenfalls keine
-; Rueckfrage der Benutzerkontensteuerung. Nur die zusaetzliche Unteraufgabe
-; "zusaetzlich maschinenweit eintragen" verlangt einmal eine Bestaetigung,
-; weil sie in HKLM schreibt (Pascal-Code unten, per regedit /s elevated) -
-; auf manchen Rechnern zeigt Windows' "Andere App auswaehlen"-Dialog
-; HKCU-Eintraege naemlich nicht an.
+; Installiert wird fuer alle Benutzer unter Program Files (einmalige Bestaetigung der
+; Benutzerkontensteuerung, PrivilegesRequired=admin). Kontextmenue-Eintraege und die
+; Registrierung als waehlbares Standardprogramm laufen deshalb ueber HKA, also
+; maschinenweit (HKLM) - dort zeigt Windows' "Andere App auswaehlen"-Dialog sie zuverlaessig an.
+; Frueher gab es dafuer die Unteraufgabe "maschinenweit eintragen"; sie entfaellt.
+; Nur MultipleInvokePromptMinimum bleibt benutzerbezogen (HKCU).
 ;
 ; Der frueher noetige Wrapper PDF-Betrachten.exe entfaellt: PyInstaller baut
 ; hier eine "echte" .exe, die Windows nicht wie pythonw.exe aus dem "Andere
@@ -19,7 +17,7 @@
 
 #define Programm    "PDF-Scan-Werkzeug"
 #define Kurzname    "PDF-Werkzeug"
-#define Fassung     "1.3.2"
+#define Fassung     "1.6.0"
 #define Urheber     "Stefan Wruck"
 #define Quelle      "programm\PDF-Werkzeug"
 #define QuellOrdner "..\..\_2026-08-21-PDF-Scan-Werkzeug"
@@ -31,12 +29,11 @@ AppName={#Programm}
 AppVersion={#Fassung}
 AppVerName={#Programm} {#Fassung}
 AppPublisher={#Urheber}
-DefaultDirName={localappdata}\{#Kurzname}
+DefaultDirName={autopf}\{#Kurzname}
 DefaultGroupName={#Programm}
 DisableProgramGroupPage=yes
 DisableDirPage=no
-PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog commandline
+PrivilegesRequired=admin
 OutputBaseFilename={#Kurzname}-Setup-{#Fassung}
 SetupIconFile={#QuellOrdner}\pdf_werkzeug.ico
 UninstallDisplayIcon={app}\{#ExeName}
@@ -55,7 +52,6 @@ Name: "deutsch"; MessagesFile: "compiler:Languages\German.isl"
 Name: "desktopsymbol"; Description: "Verknuepfung auf dem Desktop anlegen"; GroupDescription: "Zusaetzliche Verknuepfungen:"
 Name: "kontextmenue"; Description: "Rechtsklick-Menue einrichten (PDF bearbeiten / PDF betrachten / Ausgewaehlte in eine PDF zusammenfassen)"; GroupDescription: "Windows-Integration:"
 Name: "standardprogramm"; Description: "Als waehlbares Standardprogramm fuer PDF-Dateien eintragen (""Oeffnen mit"" -> ""Andere App auswaehlen"")"; GroupDescription: "Windows-Integration:"
-Name: "standardprogramm\maschinenweit"; Description: "zusaetzlich maschinenweit eintragen (Adminrechte, einmalige Bestaetigung noetig - nur wenn der Eintrag sonst nicht auftaucht)"; Flags: unchecked
 
 [Files]
 ; Das gepackte Programm samt Python, tkinter, PyMuPDF, Pillow, numpy,
@@ -70,6 +66,7 @@ Source: "{#QuellOrdner}\pdf-bearbeiten.ico"; DestDir: "{app}"; Flags: ignorevers
 [Icons]
 Name: "{group}\{#Programm}"; Filename: "{app}\{#ExeName}"; IconFilename: "{app}\pdf_werkzeug.ico"
 Name: "{group}\{#Programm} (nur Betrachten)"; Filename: "{app}\{#ExeName}"; Parameters: "--view"; IconFilename: "{app}\pdf_werkzeug.ico"
+Name: "{group}\{#Programm} Einstellungen"; Filename: "{app}\{#ExeName}"; Parameters: "--einstellungen"; IconFilename: "{app}\pdf_werkzeug.ico"
 Name: "{group}\Anleitung"; Filename: "{app}\Anleitung.txt"
 Name: "{group}\{#Programm} deinstallieren"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#Programm}"; Filename: "{app}\{#ExeName}"; IconFilename: "{app}\pdf_werkzeug.ico"; Tasks: desktopsymbol
@@ -84,24 +81,24 @@ Type: dirifempty; Name: "{app}"
 
 [Registry]
 ; --- Kontextmenue "PDF bearbeiten" (fuer .pdf-Dateien) -------------------
-Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\PDFBearbeiten"; \
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\PDFBearbeiten"; \
     ValueType: string; ValueName: ""; ValueData: "PDF bearbeiten"; \
     Tasks: kontextmenue; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\PDFBearbeiten"; \
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\PDFBearbeiten"; \
     ValueType: string; ValueName: "Icon"; ValueData: "{app}\pdf-bearbeiten.ico"; \
     Tasks: kontextmenue
-Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\PDFBearbeiten\command"; \
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\PDFBearbeiten\command"; \
     ValueType: string; ValueName: ""; ValueData: """{app}\{#ExeName}"" ""%1"""; \
     Tasks: kontextmenue
 
 ; --- Kontextmenue "PDF betrachten" (fuer .pdf-Dateien) --------------------
-Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\PDFBetrachten"; \
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\PDFBetrachten"; \
     ValueType: string; ValueName: ""; ValueData: "PDF betrachten"; \
     Tasks: kontextmenue; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\PDFBetrachten"; \
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\PDFBetrachten"; \
     ValueType: string; ValueName: "Icon"; ValueData: "{app}\pdf_werkzeug.ico"; \
     Tasks: kontextmenue
-Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\PDFBetrachten\command"; \
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\PDFBetrachten\command"; \
     ValueType: string; ValueName: ""; ValueData: """{app}\{#ExeName}"" ""%1"" --view"; \
     Tasks: kontextmenue
 
@@ -109,13 +106,13 @@ Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\PDFBetra
 ; Unter HKCU\...\Classes\*\shell, nicht SystemFileAssociations\.pdf: Bei
 ; gemischter Auswahl (PDF + Bild) zeigt der Explorer nur Befehle, die fuer
 ; alle markierten Dateitypen gelten - siehe README des Werkzeugs.
-Root: HKCU; Subkey: "Software\Classes\*\shell\PDFZusammenfassen"; \
+Root: HKA; Subkey: "Software\Classes\*\shell\PDFZusammenfassen"; \
     ValueType: string; ValueName: ""; ValueData: "Ausgewählte in eine PDF zusammenfassen"; \
     Tasks: kontextmenue; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Classes\*\shell\PDFZusammenfassen"; \
+Root: HKA; Subkey: "Software\Classes\*\shell\PDFZusammenfassen"; \
     ValueType: string; ValueName: "Icon"; ValueData: "{app}\pdf_werkzeug.ico"; \
     Tasks: kontextmenue
-Root: HKCU; Subkey: "Software\Classes\*\shell\PDFZusammenfassen\command"; \
+Root: HKA; Subkey: "Software\Classes\*\shell\PDFZusammenfassen\command"; \
     ValueType: string; ValueName: ""; ValueData: """{app}\{#ExeName}"" ""%1"" --merge"; \
     Tasks: kontextmenue
 
@@ -128,41 +125,41 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Explorer"; \
     Tasks: kontextmenue; Check: InvokeLimitNiedrig
 
 ; --- Als waehlbares Standardprogramm registrieren (benutzerbezogen) -------
-Root: HKCU; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Bearbeiten.exe"; \
+Root: HKA; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Bearbeiten.exe"; \
     ValueType: string; ValueName: ""; ValueData: "PDF bearbeiten (PDF-Scan-Werkzeug)"; \
     Tasks: standardprogramm; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Bearbeiten.exe"; \
+Root: HKA; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Bearbeiten.exe"; \
     ValueType: string; ValueName: "FriendlyAppName"; ValueData: "PDF bearbeiten (PDF-Scan-Werkzeug)"; \
     Tasks: standardprogramm
-Root: HKCU; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Bearbeiten.exe\DefaultIcon"; \
+Root: HKA; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Bearbeiten.exe\DefaultIcon"; \
     ValueType: string; ValueName: ""; ValueData: "{app}\pdf-bearbeiten.ico"; \
     Tasks: standardprogramm
-Root: HKCU; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Bearbeiten.exe\shell\open\command"; \
+Root: HKA; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Bearbeiten.exe\shell\open\command"; \
     ValueType: string; ValueName: ""; ValueData: """{app}\{#ExeName}"" ""%1"""; \
     Tasks: standardprogramm
-Root: HKCU; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Bearbeiten.exe\SupportedTypes"; \
+Root: HKA; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Bearbeiten.exe\SupportedTypes"; \
     ValueType: string; ValueName: ".pdf"; ValueData: ""; \
     Tasks: standardprogramm
-Root: HKCU; Subkey: "Software\Classes\.pdf\OpenWithList\PDF-Werkzeug-Bearbeiten.exe"; \
+Root: HKA; Subkey: "Software\Classes\.pdf\OpenWithList\PDF-Werkzeug-Bearbeiten.exe"; \
     ValueType: string; ValueName: ""; ValueData: ""; \
     Tasks: standardprogramm; Flags: uninsdeletekey
 
-Root: HKCU; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Betrachten.exe"; \
+Root: HKA; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Betrachten.exe"; \
     ValueType: string; ValueName: ""; ValueData: "PDF betrachten (PDF-Scan-Werkzeug)"; \
     Tasks: standardprogramm; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Betrachten.exe"; \
+Root: HKA; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Betrachten.exe"; \
     ValueType: string; ValueName: "FriendlyAppName"; ValueData: "PDF betrachten (PDF-Scan-Werkzeug)"; \
     Tasks: standardprogramm
-Root: HKCU; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Betrachten.exe\DefaultIcon"; \
+Root: HKA; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Betrachten.exe\DefaultIcon"; \
     ValueType: string; ValueName: ""; ValueData: "{app}\pdf_werkzeug.ico"; \
     Tasks: standardprogramm
-Root: HKCU; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Betrachten.exe\shell\open\command"; \
+Root: HKA; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Betrachten.exe\shell\open\command"; \
     ValueType: string; ValueName: ""; ValueData: """{app}\{#ExeName}"" ""%1"" --view"; \
     Tasks: standardprogramm
-Root: HKCU; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Betrachten.exe\SupportedTypes"; \
+Root: HKA; Subkey: "Software\Classes\Applications\PDF-Werkzeug-Betrachten.exe\SupportedTypes"; \
     ValueType: string; ValueName: ".pdf"; ValueData: ""; \
     Tasks: standardprogramm
-Root: HKCU; Subkey: "Software\Classes\.pdf\OpenWithList\PDF-Werkzeug-Betrachten.exe"; \
+Root: HKA; Subkey: "Software\Classes\.pdf\OpenWithList\PDF-Werkzeug-Betrachten.exe"; \
     ValueType: string; ValueName: ""; ValueData: ""; \
     Tasks: standardprogramm; Flags: uninsdeletekey
 
@@ -181,110 +178,4 @@ begin
     Result := True
   else
     Result := aktuell < 100;
-end;
-
-function MitBackslashEscaped(s: String): String;
-begin
-  { Fuer die Aufnahme in eine .reg-Zeile: Backslashes im Pfad verdoppeln }
-  Result := s;
-  StringChangeEx(Result, '\', '\\', True);
-end;
-
-{ Die maschinenweite (HKLM) Registrierung braucht Adminrechte, der Rest des
-  Setups nicht (PrivilegesRequired=lowest). Deshalb kein direkter
-  RegWriteStringValue(HKLM, ...) hier - das wuerde im unelevierten
-  Setup-Prozess scheitern - sondern ein per .reg-Datei elevierter
-  regedit /s-Aufruf, mit demselben UAC-Dialog wie beim bisherigen
-  Doppelklick auf PDF-Standardprogramm*.reg. }
-procedure MaschinenweitEintragen();
-var
-  zeilen: TStringList;
-  exePfad, regDatei: String;
-  rc: Integer;
-begin
-  exePfad := MitBackslashEscaped(ExpandConstant('{app}\{#ExeName}'));
-
-  zeilen := TStringList.Create;
-  try
-    zeilen.Add('Windows Registry Editor Version 5.00');
-    zeilen.Add('');
-    zeilen.Add('[HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Werkzeug-Bearbeiten.exe]');
-    zeilen.Add('@="PDF bearbeiten (PDF-Scan-Werkzeug)"');
-    zeilen.Add('"FriendlyAppName"="PDF bearbeiten (PDF-Scan-Werkzeug)"');
-    zeilen.Add('');
-    zeilen.Add('[HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Werkzeug-Bearbeiten.exe\shell\open\command]');
-    zeilen.Add('@="\"' + exePfad + '\" \"%1\""');
-    zeilen.Add('');
-    zeilen.Add('[HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Werkzeug-Bearbeiten.exe\SupportedTypes]');
-    zeilen.Add('".pdf"=""');
-    zeilen.Add('');
-    zeilen.Add('[HKEY_LOCAL_MACHINE\Software\Classes\.pdf\OpenWithList\PDF-Werkzeug-Bearbeiten.exe]');
-    zeilen.Add('@=""');
-    zeilen.Add('');
-    zeilen.Add('[HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Werkzeug-Betrachten.exe]');
-    zeilen.Add('@="PDF betrachten (PDF-Scan-Werkzeug)"');
-    zeilen.Add('"FriendlyAppName"="PDF betrachten (PDF-Scan-Werkzeug)"');
-    zeilen.Add('');
-    zeilen.Add('[HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Werkzeug-Betrachten.exe\shell\open\command]');
-    zeilen.Add('@="\"' + exePfad + '\" \"%1\" --view"');
-    zeilen.Add('');
-    zeilen.Add('[HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Werkzeug-Betrachten.exe\SupportedTypes]');
-    zeilen.Add('".pdf"=""');
-    zeilen.Add('');
-    zeilen.Add('[HKEY_LOCAL_MACHINE\Software\Classes\.pdf\OpenWithList\PDF-Werkzeug-Betrachten.exe]');
-    zeilen.Add('@=""');
-
-    regDatei := ExpandConstant('{tmp}\pdf-werkzeug-maschinenweit.reg');
-    zeilen.SaveToFile(regDatei);
-  finally
-    zeilen.Free;
-  end;
-
-  if ShellExec('runas', 'regedit.exe', '/s "' + regDatei + '"', '', SW_HIDE,
-               ewWaitUntilTerminated, rc) then
-    RegWriteDWordValue(HKCU, 'Software\PDF-Werkzeug', 'MaschinenweitRegistriert', 1)
-  else
-    MsgBox('Die maschinenweite Registrierung wurde nicht bestätigt (Benutzerkontensteuerung).' + #13#10 +
-           'Kontextmenü und die Registrierung im Benutzerbereich sind davon nicht betroffen.',
-           mbInformation, MB_OK);
-end;
-
-procedure MaschinenweitEntfernen();
-var
-  zeilen: TStringList;
-  regDatei: String;
-  rc: Integer;
-begin
-  zeilen := TStringList.Create;
-  try
-    zeilen.Add('Windows Registry Editor Version 5.00');
-    zeilen.Add('');
-    zeilen.Add('[-HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Werkzeug-Bearbeiten.exe]');
-    zeilen.Add('[-HKEY_LOCAL_MACHINE\Software\Classes\.pdf\OpenWithList\PDF-Werkzeug-Bearbeiten.exe]');
-    zeilen.Add('[-HKEY_LOCAL_MACHINE\Software\Classes\Applications\PDF-Werkzeug-Betrachten.exe]');
-    zeilen.Add('[-HKEY_LOCAL_MACHINE\Software\Classes\.pdf\OpenWithList\PDF-Werkzeug-Betrachten.exe]');
-    regDatei := ExpandConstant('{tmp}\pdf-werkzeug-maschinenweit-entfernen.reg');
-    zeilen.SaveToFile(regDatei);
-  finally
-    zeilen.Free;
-  end;
-  ShellExec('runas', 'regedit.exe', '/s "' + regDatei + '"', '', SW_HIDE, ewWaitUntilTerminated, rc);
-end;
-
-procedure CurStepChanged(CurStep: TSetupStep);
-begin
-  if (CurStep = ssPostInstall) and WizardIsTaskSelected('standardprogramm\maschinenweit') then
-    MaschinenweitEintragen();
-end;
-
-procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-var
-  wert: Cardinal;
-begin
-  if CurUninstallStep = usPostUninstall then
-  begin
-    if RegQueryDWordValue(HKCU, 'Software\PDF-Werkzeug', 'MaschinenweitRegistriert', wert) and (wert = 1) then
-      MaschinenweitEntfernen();
-    RegDeleteKeyIncludingSubkeys(HKCU, 'Software\PDF-Werkzeug');
-  end;
 end;

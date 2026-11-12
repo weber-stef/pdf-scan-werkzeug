@@ -12,6 +12,7 @@ from pathlib import Path
 
 import tkinter as tk
 from tkinter import ttk
+from pdf_einstellungen import C_HINT, C_OK, C_ERR, C_WARN, C_TXT
 
 import fitz
 
@@ -59,7 +60,7 @@ class LinkMixin:
     def _link_hover(self, ev):
         """Hand-Zeiger über Links (nur im normalen Markier-Modus)."""
         tool = getattr(self, "tool", "select")
-        if tool not in ("select", "pick") or not self.doc:
+        if getattr(self, "_crop_on", False) or tool not in ("select", "pick") or not self.doc:
             return
         cx, cy = self.canvas.canvasx(ev.x), self.canvas.canvasy(ev.y)
         if self._anno_hit_at(ev):
@@ -101,16 +102,16 @@ class LinkMixin:
             uri = (lk.get("uri") or "").strip()
             if re.match(r"^(https?://|mailto:|ftp://)", uri, re.I):
                 webbrowser.open(uri)
-                self.sel_status.config(text=f"Geöffnet im Browser: {uri}", foreground="#107010")
+                self.sel_status.config(text=f"Geöffnet im Browser: {uri}", foreground=C_OK)
             else:
                 self.sel_status.config(text=f"Link nicht geöffnet (Art nicht erlaubt): {uri[:80]}",
-                                       foreground="#a00000")
+                                       foreground=C_ERR)
         elif kind == fitz.LINK_NAMED:
             self._named_action(lk)
         elif kind == fitz.LINK_GOTOR:
             self.sel_status.config(
                 text=f"Verweis auf eine andere Datei ({lk.get('file', '?')}) wird nicht unterstützt.",
-                foreground="#a00000")
+                foreground=C_ERR)
         else:
             nd = lk.get("nameddest")
             if nd:
@@ -119,7 +120,7 @@ class LinkMixin:
                     self._jump(ziel.get("page", -1), ziel.get("to") or ziel.get("rect"))
                     return
             self.sel_status.config(text="Dieser Link-Typ wird nicht unterstützt.",
-                                   foreground="#a00000")
+                                   foreground=C_ERR)
 
     def _named_action(self, lk):
         name = (lk.get("name") or lk.get("nameddest") or "")
@@ -136,12 +137,12 @@ class LinkMixin:
         if ziel:
             self._jump(ziel.get("page", -1), ziel.get("to") or ziel.get("rect"))
         else:
-            self.sel_status.config(text=f"Unbekanntes Linkziel „{name}“.", foreground="#a00000")
+            self.sel_status.config(text=f"Unbekanntes Linkziel „{name}“.", foreground=C_ERR)
 
     def _jump(self, pno, to):
         if not isinstance(pno, int) or pno < 0 or pno >= len(self.doc):
             self.sel_status.config(text="Das Ziel des Links gibt es nicht (mehr).",
-                                   foreground="#a00000")
+                                   foreground=C_ERR)
             return
         y0, _y1 = self.canvas.yview()
         self._nav_history.append((self.page_no, y0))
@@ -157,7 +158,7 @@ class LinkMixin:
             if pt is not None:
                 self._scroll_to_point(pt)
         self.sel_status.config(text=f"Gesprungen zu Seite {pno + 1} (Alt+Links: zurück)",
-                               foreground="#107010")
+                               foreground=C_OK)
 
     def _scroll_to_point(self, pt):
         self.update_idletasks()

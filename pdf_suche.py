@@ -7,6 +7,7 @@ Umschalt+Enter / Umschalt+F3 zum vorherigen, Esc schließt die Leiste.
 
 import tkinter as tk
 from tkinter import messagebox, ttk
+from pdf_einstellungen import C_HINT, C_OK, C_ERR, C_WARN, C_TXT
 
 import fitz
 
@@ -35,7 +36,7 @@ class ChangeSelectionDialog(tk.Toplevel):
             self.ent = tk.Text(self, width=60, height=7, wrap="word", undo=True)
             self.ent.insert("1.0", old)
             self.ent.grid(row=1, column=1, sticky="ew", **pad)
-            ttk.Label(self, foreground="#606060",
+            ttk.Label(self, foreground=C_HINT,
                       text="Strg+Enter übernimmt. Der Rest des Absatzes wird neu umbrochen."
                       ).grid(row=2, column=1, sticky="w", **pad)
         else:
@@ -44,7 +45,7 @@ class ChangeSelectionDialog(tk.Toplevel):
             ttk.Checkbutton(self, variable=self.var_all,
                             text="Überall in der PDF ändern (vorher kommt eine Rückfrage mit der Anzahl)"
                             ).grid(row=2, column=1, sticky="w", **pad)
-        ttk.Label(self, foreground="#606060", text=font_hint).grid(
+        ttk.Label(self, foreground=C_HINT, text=font_hint).grid(
             row=3, column=0, columnspan=2, sticky="w", **pad)
         bt = ttk.Frame(self)
         bt.grid(row=4, column=0, columnspan=2, sticky="e", **pad)
@@ -95,7 +96,7 @@ class SearchMixin:
                    command=lambda: self.search_step(-1)).pack(side="left")
         ttk.Button(row, text="▼", width=3,
                    command=lambda: self.search_step(1)).pack(side="left", padx=(2, 8))
-        self.lbl_search = ttk.Label(row, text="", foreground="#606060")
+        self.lbl_search = ttk.Label(row, text="", foreground=C_HINT)
         self.lbl_search.pack(side="left")
         ttk.Button(row, text="✕", width=3,
                    command=self.close_search).pack(side="right")
@@ -107,7 +108,7 @@ class SearchMixin:
         ttk.Button(self.rep_row, text="Ersetzen", command=self.replace_current).pack(side="left")
         ttk.Button(self.rep_row, text="Alle ersetzen", command=self.replace_all
                    ).pack(side="left", padx=(6, 8))
-        ttk.Label(self.rep_row, foreground="#606060",
+        ttk.Label(self.rep_row, foreground=C_HINT,
                   text="Der geänderte Textabschnitt erscheint in der ähnlichsten installierten Schrift."
                   ).pack(side="left")
 
@@ -187,7 +188,7 @@ class SearchMixin:
             self.lbl_search.config(
                 text="Nichts gefunden" if has_text else
                      "Nichts gefunden – die PDF hat keinen Text (OCR im Bearbeiter nötig?)",
-                foreground="#a00000")
+                foreground=C_ERR)
             self.canvas.delete("searchhit")
             return
         # erster Treffer ab der aktuellen Seite
@@ -219,7 +220,7 @@ class SearchMixin:
     def _search_label(self):
         n = len(self._search_hits or [])
         self.lbl_search.config(text=f"Treffer {self._search_i + 1} von {n}" if self._search_i >= 0
-                               else f"{n} Treffer", foreground="#606060")
+                               else f"{n} Treffer", foreground=C_HINT)
 
     def _search_go(self, i):
         self._search_i = i
@@ -279,7 +280,7 @@ class SearchMixin:
     def _repl_ready(self):
         q = self.var_q.get().strip()
         if not q or not self.doc:
-            self.lbl_search.config(text="Erst oben den Suchbegriff eingeben.", foreground="#a00000")
+            self.lbl_search.config(text="Erst oben den Suchbegriff eingeben.", foreground=C_ERR)
             return None
         if self._search_hits is None or self._search_text != q:
             self._search_run(jump=False)
@@ -367,7 +368,7 @@ class SearchMixin:
             text = f"{ergebnis['n']} von {n} Treffern ersetzt"
             if rest > 0:
                 text += f" – {rest} ließen sich nicht ersetzen (über mehrere Textabschnitte verteilt oder senkrechter Text)"
-            self.sel_status.config(text="✓ " + text, foreground="#107010" if rest <= 0 else "#a06000")
+            self.sel_status.config(text="✓ " + text, foreground=C_OK if rest <= 0 else C_WARN)
             self._search_hits = None
             self.after(400, lambda: self._search_run(jump=False))
 
@@ -456,7 +457,7 @@ class SearchMixin:
                 self.sel_status.config(
                     text=f"✓ Bereich geändert – der Absatz ist jetzt {n_neu - n_alt} Zeile(n) länger "
                          "und kann in die Nachbarschaft ragen (Strg+Z macht es rückgängig).",
-                    foreground="#a06000")
+                    foreground=C_WARN)
 
     # ----- Doppelklick: Wort markieren -----
 
@@ -482,4 +483,4 @@ class SearchMixin:
         self.btn_chg.config(state="normal")
         self.copy_selection(silent=True)
         self.sel_status.config(text=f"✓ Wort markiert und in die Zwischenablage kopiert: „{text}“ "
-                                    "(F2 = ändern)", foreground="#107010")
+                                    "(F2 = ändern)", foreground=C_OK)
