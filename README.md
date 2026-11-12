@@ -191,6 +191,7 @@ auffrischen: `ie4uinit.exe -show`, dann Explorer neu starten.
 | Datei | Zweck |
 |---|---|
 | `pdf_tool.py` | Das Programm selbst |
+| `pdf_verkleinern.py` | Fenster „Dateigröße verkleinern“ im Betrachter |
 | `tessdata/` | Heruntergeladene Tesseract-Sprachdateien (OCR) |
 | `pdf-bearbeiten.ico` | Icon für Kontextmenü / Standardprogramm |
 | `pdf_werkzeug.ico` | Icon für Verknüpfungen (Desktop/Startmenü) |
@@ -282,3 +283,14 @@ Senkrecht stehende Textzeilen werden bei der Auswahl ignoriert; bei mehreren Spa
 ## Beschneiden im Betrachter (seit 05.11.2026)
 
 Knopf „✂ Beschneiden“ (Strg+B) öffnet eine eigene Leiste. Auf der Seite ein Rechteck aufziehen, mit den Anfassern an Ecken und Kanten nachziehen, im Rechteck ziehen verschiebt es. Die Leiste zeigt die Größe und die Ränder in mm. „Zuschneiden“ (oder Enter) setzt verlustfrei die CropBox, entweder nur dieser Seite oder allen Seiten mit gleichen Anteilen (gedrehte Seiten werden richtig umgerechnet). „Zuschnitt entfernen“ stellt die volle Seite wieder her. Die Datei wird sofort geändert, Strg+Z macht es rückgängig. Esc hebt die Auswahl auf, ein zweites Esc schließt die Leiste; Entf löscht hier nie die Seite. Hinweis: Die CropBox blendet nur aus, der Inhalt bleibt in der Datei. Modul `pdf_beschneiden.py`.
+
+## Dateigröße verkleinern im Betrachter (seit 12.11.2026)
+
+Knopf „⇩ Verkleinern“ in der Werkzeugleiste oder „Dateigröße verkleinern…“ im Rechtsklick-Menü. Das Fenster zeigt die aktuelle Größe, die Zahl der Bilder und deren höchste Auflösung. Die eingebetteten Bilder werden neu als JPEG gespeichert, bei Bedarf mit geringerer Auflösung. Zwei Wege:
+
+- **Zielgröße:** MB eingeben (z. B. `2,5`). Das Fenster sucht die höchste Auflösung (Original, 300, 200, 150, 120, 100, 72 dpi) und Qualität, mit der die Datei darunter bleibt, und zeigt beides an. Liegt die fertige Datei mehr als 2 % über dem Ziel, wird beim Speichern mit niedrigerer Qualität nachgebessert.
+- **Selbst wählen:** Auflösung und JPEG-Qualität (15–95) einstellen. Die entstehende Größe wird nach jeder Änderung vorausberechnet.
+
+Die Vorhersage kodiert eine Stichprobe von fünf Bildern wirklich und rechnet auf alle hoch. Sie ist ein Näherungswert, im Test lag sie meist auf wenige Prozent genau. „Verkleinert speichern unter…“ schreibt immer eine neue Datei (Vorschlag `Name_klein.pdf`), das Original bleibt unverändert; die geöffnete Datei selbst lässt sich hier nicht überschreiben.
+
+Bilder mit Transparenzmaske, 1-Bit-Bilder (Textscans, ohnehin klein) und sehr kleine Bilder bleiben unangetastet. Text, Schrift und Lesezeichen bleiben erhalten. Modul `pdf_verkleinern.py`.
