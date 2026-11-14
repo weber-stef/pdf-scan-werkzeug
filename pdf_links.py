@@ -6,12 +6,14 @@ Webadressen öffnen den Browser. Mauszeiger wird über Links zur Hand.
 Alt+Links (oder der Knopf ↩) springt zurück an die Stelle vor dem Sprung.
 """
 
+import os
 import re
+import urllib.parse
 import webbrowser
 from pathlib import Path
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from pdf_einstellungen import C_HINT, C_OK, C_ERR, C_WARN, C_TXT
 
 import fitz
@@ -108,6 +110,8 @@ class LinkMixin:
                                        foreground=C_ERR)
         elif kind == fitz.LINK_NAMED:
             self._named_action(lk)
+        elif kind == fitz.LINK_LAUNCH:
+            self._launch_file(lk)
         elif kind == fitz.LINK_GOTOR:
             self.sel_status.config(
                 text=f"Verweis auf eine andere Datei ({lk.get('file', '?')}) wird nicht unterstützt.",
@@ -121,6 +125,25 @@ class LinkMixin:
                     return
             self.sel_status.config(text="Dieser Link-Typ wird nicht unterstützt.",
                                    foreground=C_ERR)
+
+    def _launch_file(self, lk):
+        """Link auf eine lokale Datei (file:///G:/...): nach Rückfrage mit dem Standardprogramm öffnen."""
+        roh = urllib.parse.unquote((lk.get("file") or "").strip())
+        if re.match(r"^/[A-Za-z]:", roh):          # MuPDF liefert "/G:/Ordner/Datei"
+            roh = roh[1:]
+        pfad = Path(roh.replace("/", "\\"))
+        if not pfad.is_absolute() or not pfad.exists():
+            self.sel_status.config(text=f"Link-Ziel nicht gefunden: {roh[:80]}", foreground=C_ERR)
+            return
+        if not messagebox.askyesno(TITEL, f"Diese PDF möchte eine Datei öffnen:\n\n{pfad}\n\nÖffnen?",
+                                   parent=self.canvas.winfo_toplevel()):
+            self.sel_status.config(text="Link nicht geöffnet.", foreground=C_HINT)
+            return
+        try:
+            os.startfile(str(pfad))
+            self.sel_status.config(text=f"Geöffnet: {pfad.name}", foreground=C_OK)
+        except OSError as e:
+            self.sel_status.config(text=f"Öffnen fehlgeschlagen: {e}", foreground=C_ERR)
 
     def _named_action(self, lk):
         name = (lk.get("name") or lk.get("nameddest") or "")
