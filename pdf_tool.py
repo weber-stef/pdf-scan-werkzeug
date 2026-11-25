@@ -2782,6 +2782,20 @@ class PdfToolApp(tk.Tk):
         self._merge_timer = None
 
         self._build_ui()
+        self._fit_to_content()
+
+    def _fit_to_content(self):
+        """Fenster so groß machen, dass alle Knöpfe (bis „Ordner im Explorer
+        öffnen“) sichtbar sind – höchstens so groß wie der Bildschirm."""
+        self.update_idletasks()
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        max_w, max_h = sw - 40, sh - 90          # Platz für Taskleiste + Titelleiste
+        w = min(max(1180, self.winfo_reqwidth()), max_w)
+        h = min(max(760, self.winfo_reqheight()), max_h)
+        x = max(0, (sw - w) // 2)
+        y = max(0, (sh - 40 - h) // 2 - 15)
+        self.geometry(f"{w}x{h}+{x}+{y}")
+        self.minsize(min(980, max_w), min(self.winfo_reqheight(), max_h))
 
     # ---------------- UI-Aufbau ----------------
 

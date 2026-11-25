@@ -17,7 +17,7 @@
 
 #define Programm    "PDF-Scan-Werkzeug"
 #define Kurzname    "PDF-Werkzeug"
-#define Fassung     "1.6.1"
+#define Fassung     "1.6.2"
 #define Urheber     "Stefan Wruck"
 #define Quelle      "programm\PDF-Werkzeug"
 #define QuellOrdner "..\..\_2026-08-21-PDF-Scan-Werkzeug"
