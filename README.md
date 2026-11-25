@@ -94,6 +94,10 @@ Installation z. B. mit:
 
 Alternativ per Doppelklick auf `PDF-Werkzeug starten.bat`.
 
+## Installation per Setup (ohne Python)
+
+Unter [Releases](https://github.com/weber-stef/pdf-scan-werkzeug/releases) liegt für jede Fassung ein fertiges Setup (`PDF-Werkzeug-Setup-<Fassung>.exe`, aktuell 1.6.2). Es bringt Python, alle Bibliotheken und die Tesseract-Sprachdateien mit und installiert nach `C:\Program Files\PDF-Werkzeug`. Eine neuere Fassung wird einfach über die alte installiert; vorher alle offenen Fenster des Werkzeugs schließen. Gebaut wird das Setup mit den Skripten im Ordner `installer/` (PyInstaller und Inno Setup, siehe `installer/Anleitung.txt`).
+
 ## Windows-Integration einrichten (optional)
 
 Die `.reg`-Dateien enthalten den absoluten Pfad zu diesem Ordner
@@ -214,8 +218,11 @@ wieder auf `pdf_tool.py` an seinem neuen Ort verweisen.
 
 ## Stand
 
-Am 21.08.2026 gesichert nach T:. Zuletzt kam das Zusammenfassen mehrerer Dateien zu einer PDF dazu, samt Kontextmenü-Eintrag „Ausgewählte in eine PDF zusammenfassen“.
-Das Werkzeug wird weiter benutzt, der Ordner ist also nicht eingefroren – die Sicherung gibt nur diesen Stand wieder.
+Aktuelle Fassung: **1.6.2** vom 25.11.2026. Das Werkzeug wird weiter benutzt und ausgebaut.
+
+- **1.6.2 (25.11.2026):** Das Bearbeiten-Fenster richtet seine Größe nach dem Inhalt (höchstens Bildschirmgröße). Vorher öffnete es zu niedrig, und „▶ Verarbeiten“, „Bearbeitetes PDF öffnen“ und „Ordner im Explorer öffnen“ waren erst nach dem Vergrößern zu sehen.
+- **1.6.1 (14.11.2026):** Links auf lokale Dateien öffnen im Betrachter (nach Rückfrage).
+- **1.6.0 (12.11.2026):** Dateigröße verkleinern, Beschneiden, Kommentieren und Ändern, Suche, Sprungmarken und Lesezeichen im Betrachter.
 
 ## Seitenleiste mit Vorschaubildern (Betrachter)
 
@@ -244,7 +251,6 @@ Knopf „🖍 Kommentieren & Ändern“ (Strg+K) blendet eine zweite Leiste ein:
 - **Text ändern:** auf einen Textabschnitt klicken (Umschalt = ganze Zeile). Das Fenster schlägt die ähnlichste installierte Schrift samt Größe und Farbe vor; der alte Text wird entfernt (Redaktion, Hintergrundfarbe wird aus der Seite entnommen), der neue sitzt auf derselben Grundlinie. Geht nur bei Seiten mit Textebene (nicht bei reinen Scans) und nur bei waagerechtem Text.
 - Alles wird sofort in die Datei geschrieben (inkrementell). Der erste Eingriff je Sitzung legt `<Name>_vor-Aenderung.pdf` an. **Rückgängig** (Strg+Z) stellt über Dateikopien im Temp-Ordner wieder her (höchstens 30 Schritte, 1,5 GB); nach Löschen/Umordnen/Einfügen ist die Liste leer.
 - Gedrehte Seiten werden berücksichtigt. Die Schriftdatei wird je Seite einmal eingebettet (Arial etwa 1 MB).
-- Nicht im Installer (Setup 1.2.0 enthält es noch nicht) und nicht auf B:/T:.
 - **Gesetzte Texte später ändern:** Mit Schreibmaschine oder „Text ändern“ auf einen eigenen Kommentar klicken, dann steht er wieder im Schreibfeld. Schrift, Größe, Farbe und „Gelb hinterlegt“ gelten so, wie sie oben gerade stehen; leerer Text löscht den Kommentar. Technik: jeder Text liegt als eigene Inhaltsströme in der Seite, deren Nummern samt Einstellungen im Seitenschlüssel `AnnoWerkzeug` (Base64-JSON) stehen; Ändern tauscht diese Ströme aus. Kommentare aus früheren Läufen (vor dem 01.11.2026) haben diesen Eintrag nicht und lassen sich nur als normaler PDF-Text ändern. Pfeile und Formen sind nicht nachträglich änderbar, nur per Strg+Z zurück.
 - **Gesetzte Texte verschieben:** Mit Schreibmaschine oder „Text ändern“ den Kommentar anfassen und ziehen (gestrichelter Rahmen zeigt das Ziel, der Text bleibt auf der Seite). Ein Klick ohne Ziehen öffnet ihn zum Bearbeiten. Strg+Z setzt ihn zurück.
 - **Pfeile und Formen verschieben:** Mit jedem Werkzeug dieser Leiste (außer „Markieren“) Pfeil, Rechteck oder Kreis an der Linie anfassen und ziehen; bei Rechteck und Kreis zählt nur der Rand, damit man innen weiter schreiben kann. Gilt für Objekte, die mit der Fassung vom 01.11.2026 gesetzt wurden. Größe oder Farbe ändern geht noch nicht (Strg+Z und neu setzen).
@@ -257,7 +263,8 @@ Knopf „🔍 Suchen“ oder Strg+F öffnet eine Suchleiste unter der Werkzeugle
 ## Sprungmarken und Lesezeichen (seit 01.11.2026)
 
 Code: `pdf_links.py` (Mixin `LinkMixin`).
-- **Links in der Seite** (Inhaltsverzeichnis, Register, Webadressen): ein Klick im normalen Markier-Modus folgt ihnen, der Mauszeiger wird über Links zur Hand. Unterstützt: Sprung zu Seite/Stelle, benannte Ziele (InDesign-Register), Aktionen wie nächste/vorherige Seite, Webadressen und Mailadressen im Browser. Verweise auf andere Dateien und Programmstarts werden bewusst nicht ausgeführt.
+- **Links in der Seite** (Inhaltsverzeichnis, Register, Webadressen): ein Klick im normalen Markier-Modus folgt ihnen, der Mauszeiger wird über Links zur Hand. Unterstützt: Sprung zu Seite/Stelle, benannte Ziele (InDesign-Register), Aktionen wie nächste/vorherige Seite, Webadressen und Mailadressen im Browser.
+- **Links auf lokale Dateien** (z. B. `file:///G:/Ordner/Datei.pdf`, seit 1.6.1): Das Werkzeug fragt nach und öffnet die Datei dann mit dem Standardprogramm. Existiert die Datei nicht, steht das in der Statuszeile. Sprünge in eine andere PDF an eine bestimmte Stelle werden nicht unterstützt.
 - **↩ / Alt+Links:** springt zurück an die Stelle vor dem Linksprung (bis 50 Schritte).
 - **🔖 Lesezeichen (F5):** zeigt das Lesezeichen-Verzeichnis der PDF als aufklappbaren Baum anstelle der Vorschaubilder; Klick springt zur Seite. F4 oder erneutes F5 bringt die Vorschaubilder zurück.
 
